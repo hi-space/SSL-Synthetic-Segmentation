@@ -10,7 +10,7 @@ from .seg_data_base import SegmentationDataset
 
 
 class GTASegmentation(SegmentationDataset):
-    BASE_DIR = 'gta'
+    BASE_DIR = 'gtav'
     NUM_CLASS = 19
 
     colors = [  # [  0,   0,   0],
@@ -42,8 +42,12 @@ class GTASegmentation(SegmentationDataset):
 
     label_colours = dict(zip(range(NUM_CLASS), colors))
 
-    def __init__(self, root='G:/data', split='train', mode=None, transform=None, **kwargs):
+    def __init__(self, root='/data/paper/dataset', split='train', mode=None, transform=None, **kwargs):
         super(GTASegmentation, self).__init__(root, split, mode, transform, **kwargs)
+        print('@@@@@@@@@@@@')
+        print(self.mode)
+        print(self)
+        print('@@@@@@@@@@@@')
         self.root = os.path.join(root, self.BASE_DIR)
         print(self.root)
         assert os.path.exists(self.root), "Please put dataset in {SEG_ROOT}/datasets/gta"

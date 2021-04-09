@@ -49,7 +49,7 @@ class Trainer(object):
         train_sampler = make_data_sampler(train_dataset, shuffle=True, distributed=args.distributed)
         train_batch_sampler = make_batch_data_sampler(train_sampler, cfg.TRAIN.BATCH_SIZE, self.max_iters, drop_last=True)
         val_sampler = make_data_sampler(val_dataset, False, args.distributed)
-        val_batch_sampler = make_batch_data_sampler(val_sampler, cfg.TEST.BATCH_SIZE, drop_last=False)
+        val_batch_sampler = make_batch_data_sampler(val_sampler, cfg.TEST.BATCH_SIZE, drop_last=True)
 
         self.train_loader = data.DataLoader(dataset=train_dataset,
                                             batch_sampler=train_batch_sampler,
@@ -125,7 +125,11 @@ class Trainer(object):
 
         self.model.train()
         iteration = self.start_epoch * iters_per_epoch if self.start_epoch > 0 else 0
-        for (images, targets, _) in self.train_loader:
+        for idx, (images, targets, base) in enumerate(self.train_loader):
+            print(idx)
+            print(images.shape, targets.shape)
+            print(base)
+            breakpoint()
             epoch = iteration // iters_per_epoch + 1
             iteration += 1
 
@@ -133,6 +137,7 @@ class Trainer(object):
             targets = targets.to(self.device)
 
             outputs = self.model(images)
+
             loss_dict = self.criterion(outputs, targets)
 
             losses = sum(loss for loss in loss_dict.values())
