@@ -44,10 +44,6 @@ class GTASegmentation(SegmentationDataset):
 
     def __init__(self, root='/data/paper/dataset', split='train', mode=None, transform=None, **kwargs):
         super(GTASegmentation, self).__init__(root, split, mode, transform, **kwargs)
-        print('@@@@@@@@@@@@')
-        print(self.mode)
-        print(self)
-        print('@@@@@@@@@@@@')
         self.root = os.path.join(root, self.BASE_DIR)
         print(self.root)
         assert os.path.exists(self.root), "Please put dataset in {SEG_ROOT}/datasets/gta"
@@ -80,7 +76,7 @@ class GTASegmentation(SegmentationDataset):
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
         mask = Image.open(self.mask_paths[index])
-        maks = self._encode_segmap(np.array(mask, dtype=np.uint8))
+        # mask = self._encode_segmap(np.array(mask, dtype=np.uint8))
 
         # synchrosized transform
         if self.mode == 'train':
