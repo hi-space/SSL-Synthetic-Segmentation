@@ -37,12 +37,15 @@ class GTASegmentation(SegmentationDataset):
     
     void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, 34, -1]
     valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33,]
-    ignore_index = 250
+    ignore_index = 0
     class_map = dict(zip(valid_classes, range(19)))
 
     label_colours = dict(zip(range(NUM_CLASS), colors))
 
     def __init__(self, root='/data/paper/dataset', split='train', mode=None, transform=None, **kwargs):
+        # self.img_size = (2049, 1025)
+        self.img_size = (1914, 1052)
+
         super(GTASegmentation, self).__init__(root, split, mode, transform, **kwargs)
         self.root = os.path.join(root, self.BASE_DIR)
         print(self.root)
@@ -52,13 +55,13 @@ class GTASegmentation(SegmentationDataset):
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images in subfolders of:" + root + "\n")
         self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22,
-                              23, 24, 25, 26, 27, 28, 31, 32, 33]
+                              23, 24, 25, 26, 27, 28, 31, 32, 33, 34]
         self._key = np.array([-1, -1, -1, -1, -1, -1,
                               -1, -1, 0, 1, -1, -1,
                               2, 3, 4, -1, -1, -1,
                               5, -1, 6, 7, 8, 9,
                               10, 11, 12, 13, 14, 15,
-                              -1, -1, 16, 17, 18])
+                              -1, -1, 16, 17, 18, -1])
         self._mapping = np.array(range(-1, len(self._key) - 1)).astype('int32')
 
     def _class_to_index(self, mask):
@@ -76,7 +79,13 @@ class GTASegmentation(SegmentationDataset):
                 img = self.transform(img)
             return img, os.path.basename(self.images[index])
         mask = Image.open(self.mask_paths[index])
-        # mask = self._encode_segmap(np.array(mask, dtype=np.uint8))
+
+        # print(np.unique(np.array(mask)))
+
+        # mask = Image.fromarray(self.encoder(np.array(mask, dtype=np.uint8)))
+        
+        img = img.resize(self.img_size, Image.BILINEAR)
+        mask = mask.resize(self.img_size, Image.NEAREST)
 
         # synchrosized transform
         if self.mode == 'train':
@@ -89,18 +98,12 @@ class GTASegmentation(SegmentationDataset):
         # general resize, normalize and toTensor
         if self.transform is not None:
             img = self.transform(img)
+
         return img, mask, os.path.basename(self.images[index])
 
     def _mask_transform(self, mask):
         target = self._class_to_index(np.array(mask).astype('int32'))
         return torch.LongTensor(np.array(target).astype('int32'))
-    
-    def _encode_segmap(self, lbl):
-        for _i in self.void_classes:
-            lbl[lbl == _i] = self.ignore_index
-        for _i in self.valid_classes:
-            lbl[lbl == _i] = self.class_map[_i]
-        return lbl
 
     def __len__(self):
         return len(self.images)
@@ -115,6 +118,31 @@ class GTASegmentation(SegmentationDataset):
         return ('road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
                 'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
                 'truck', 'bus', 'train', 'motorcycle', 'bicycle')
+
+
+    def encoder(self, lbl):
+        # for _i in self.void_classes:
+        #     lbl[lbl == _i] = self.ignore_index
+        # for _i in self.valid_classes:
+        #     lbl[lbl == _i] = self.class_map[_i]
+        for _i in self.valid_classes:
+            lbl[lbl == _i] = self.class_map[_i]
+        return lbl
+
+    def decoder(self, temp):
+        r = temp.copy()
+        g = temp.copy()
+        b = temp.copy()
+        for l in range(0, self.n_classes):
+            r[temp == l] = self.label_colours[l][0]
+            g[temp == l] = self.label_colours[l][1]
+            b[temp == l] = self.label_colours[l][2]
+
+        rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
+        rgb[:, :, 0] = r / 255.0
+        rgb[:, :, 1] = g / 255.0
+        rgb[:, :, 2] = b / 255.0
+        return rgb
 
 
 def _get_gta_pairs(folder, split='train'):
