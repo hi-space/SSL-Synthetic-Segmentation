@@ -1,0 +1,118 @@
+2021-04-09 16:54:19,579 Segmentron INFO: Using 1 GPUs
+2021-04-09 16:54:19,580 Segmentron INFO: Namespace(config_file='configs/gta_deeplabv3_plus_resnet.yaml', device='cuda', distributed=False, input_img='tools/demo_vis.png', local_rank=0, log_iter=10, no_cuda=False, num_gpus=1, opts=[], resume=None, skip_val=False, val_epoch=1)
+2021-04-09 16:54:19,580 Segmentron INFO: {
+        "SEED": 1024,
+        "TIME_STAMP": "2021-04-09-16-54",
+        "ROOT_PATH": "/home/yoo/workspace/SSL-Synthetic-Segmentation",
+        "PHASE": "train",
+        "DATASET": {
+                "NAME": "gta",
+                "MEAN": [
+                        0.485,
+                        0.456,
+                        0.406
+                ],
+                "STD": [
+                        0.229,
+                        0.224,
+                        0.225
+                ],
+                "IGNORE_INDEX": -1,
+                "WORKERS": 4,
+                "MODE": "testval"
+        },
+        "AUG": {
+                "MIRROR": true,
+                "BLUR_PROB": 0.0,
+                "BLUR_RADIUS": 0.0,
+                "COLOR_JITTER": null
+        },
+        "TRAIN": {
+                "EPOCHS": 400,
+                "BATCH_SIZE": 4,
+                "CROP_SIZE": 769,
+                "BASE_SIZE": 1024,
+                "MODEL_SAVE_DIR": "runs/checkpoints/",
+                "LOG_SAVE_DIR": "runs/logs/",
+                "PRETRAINED_MODEL_PATH": "",
+                "BACKBONE_PRETRAINED": true,
+                "BACKBONE_PRETRAINED_PATH": "",
+                "RESUME_MODEL_PATH": "",
+                "SYNC_BATCH_NORM": true,
+                "SNAPSHOT_EPOCH": 10
+        },
+        "SOLVER": {
+                "LR": 0.02,
+                "OPTIMIZER": "sgd",
+                "EPSILON": 1e-08,
+                "MOMENTUM": 0.9,
+                "WEIGHT_DECAY": 0.0001,
+                "DECODER_LR_FACTOR": 10.0,
+                "LR_SCHEDULER": "poly",
+                "POLY": {
+                        "POWER": 0.9
+                },
+                "STEP": {
+                        "GAMMA": 0.1,
+                        "DECAY_EPOCH": [
+                                10,
+                                20
+                        ]
+                },
+                "WARMUP": {
+                        "EPOCHS": 0.0,
+                        "FACTOR": 0.3333333333333333,
+                        "METHOD": "linear"
+                },
+                "OHEM": false,
+                "AUX": false,
+                "AUX_WEIGHT": 0.4,
+                "LOSS_NAME": ""
+        },
+        "TEST": {
+                "TEST_MODEL_PATH": "",
+                "BATCH_SIZE": 4,
+                "CROP_SIZE": [
+                        1025,
+                        2049
+                ],
+                "SCALES": [
+                        1.0
+                ],
+                "FLIP": false
+        },
+        "VISUAL": {
+                "OUTPUT_DIR": "../runs/visual/"
+        },
+        "MODEL": {
+                "MODEL_NAME": "DeepLabV3_Plus",
+                "BACKBONE": "resnet50",
+                "BACKBONE_SCALE": 1.0,
+                "MULTI_LOSS_WEIGHT": [
+                        1.0
+                ],
+                "DEFAULT_GROUP_NUMBER": 32,
+                "DEFAULT_EPSILON": 1e-05,
+                "BN_TYPE": "BN",
+                "BN_EPS_FOR_ENCODER": null,
+                "BN_EPS_FOR_DECODER": null,
+                "OUTPUT_STRIDE": 16,
+                "BN_MOMENTUM": null,
+                "DEEPLABV3_PLUS": {
+                        "USE_ASPP": true,
+                        "ENABLE_DECODER": true,
+                        "ASPP_WITH_SEP_CONV": true,
+                        "DECODER_USE_SEP_CONV": true
+                },
+                "CCNET": {
+                        "RECURRENCE": 2
+                }
+        }
+}
+2021-04-09 16:54:20,139 Segmentron INFO: Found 24966 images in the folder /data/paper/dataset/gtav/images
+2021-04-09 16:54:20,336 Segmentron INFO: Found 24966 images in the folder /data/paper/dataset/gtav/images
+2021-04-09 16:54:20,598 Segmentron INFO: load backbone pretrained model from url..
+2021-04-09 16:54:20,903 Segmentron INFO: <All keys matched successfully>
+2021-04-09 16:54:25,187 Segmentron INFO: DeepLabV3Plus flops: 302.922G input shape is [3, 1024, 2048], params: 26.696M
+2021-04-09 16:54:25,187 Segmentron INFO: Not use SyncBatchNorm!
+2021-04-09 16:54:25,190 Segmentron INFO: Start training, Total Epochs: 400 = Total Iterations 2496400
