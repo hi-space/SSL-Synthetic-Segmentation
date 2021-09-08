@@ -1,4 +1,5 @@
 import argparse
+from da.config import CONSTS
 import scipy
 from scipy import ndimage
 import numpy as np
@@ -22,14 +23,15 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 import yaml
 import time
+from config import CONSTS
 
 torch.backends.cudnn.benchmark=True
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = './data/Cityscapes/data'
-DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
-SAVE_PATH = './result/cityscapes'
+DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
+DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_RESULT_PATH
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
@@ -39,7 +41,7 @@ RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 SET = 'val'
 
-MODEL = 'DeeplabMulti'
+MODEL = 'Deeplab'
 
 palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190, 153, 153, 153, 153, 153, 250, 170, 30,
            220, 220, 0, 107, 142, 35, 152, 251, 152, 70, 130, 180, 220, 20, 60, 255, 0, 0, 0, 0, 142, 0, 0, 70,

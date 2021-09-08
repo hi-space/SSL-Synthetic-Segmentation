@@ -1,4 +1,5 @@
 import os
+import sys
 import os.path as osp
 import numpy as np
 import random
@@ -12,6 +13,9 @@ from torch.utils import data
 from PIL import Image, ImageFile
 from dataset.autoaugment import ImageNetPolicy
 import time
+
+sys.path.insert(1, os.path.realpath(os.path.pardir))
+from config import CONSTS
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -89,7 +93,7 @@ class cityscapesDataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = cityscapesDataSet('./data/Cityscapes/data', './dataset/cityscapes_list/train.txt', mean=(0,0,0), set = 'train')
+    dst = cityscapesDataSet(CONSTS.CITYSCAPES_PATH, CONSTS.CITYSCAPES_TRAIN_LIST_PATH, mean=(0,0,0), set = 'train')
     trainloader = data.DataLoader(dst, batch_size=4)
     for i, data in enumerate(trainloader):
         imgs, _, _, _ = data

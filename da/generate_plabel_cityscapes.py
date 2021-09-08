@@ -23,16 +23,18 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 import yaml
 
+from config import CONSTS
+
 torch.backends.cudnn.benchmark=True
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = './data/Cityscapes/data'
-DATA_LIST_PATH = './dataset/cityscapes_list/train.txt'
-SAVE_PATH = './data/Cityscapes/data/pseudo/train'
+DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'train'
 
-if not os.path.isdir('./data/Cityscapes/data/pseudo/'):
-    os.mkdir('./data/Cityscapes/data/pseudo/')
+if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
+    os.mkdir(CONSTS.CITYSCAPES_PSEUDO_PATH)
     os.mkdir(SAVE_PATH)
 
 IGNORE_LABEL = 255

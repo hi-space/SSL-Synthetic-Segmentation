@@ -220,7 +220,21 @@ class ResNet(nn.Module):
                 {'params': self.get_10x_lr_params(), 'lr': 10*args.learning_rate}] 
 
 
-def Res_Deeplab(num_classes=21):
-    model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
+def Res_Deeplab(num_classes=21, layer=50):
+    """
+    block: resnet num of block (18, 34, 50, 101, 152)
+    """
+    if layer == 18:
+        num_block = [2, 2, 2, 2]
+    elif layer == 34:
+        num_block = [3, 4, 6, 3]
+    elif layer == 50:
+        num_block = [3, 4, 6, 3]
+    elif layer == 101:
+        num_block = [3, 4, 23, 3]
+    elif layer == 152:
+        num_block = [3, 8, 36, 3]
+
+    model = ResNet(Bottleneck, num_block, num_classes)
     return model
 

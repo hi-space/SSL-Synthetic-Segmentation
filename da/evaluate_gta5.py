@@ -20,12 +20,14 @@ from PIL import Image
 from utils.tool import fliplr
 import matplotlib.pyplot as plt
 import torch.nn as nn
+from config import CONSTS
+
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 # We just use this file to evaluate the perfromance on the training set
-DATA_DIRECTORY = './data/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
-SAVE_PATH = './result/GTA5'
+DATA_DIRECTORY = CONSTS.GTA_PATH
+DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
+SAVE_PATH = CONSTS.GTA_RESULT_PATH
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
@@ -35,7 +37,7 @@ RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 SET = 'val'
 
-MODEL = 'DeeplabMulti'
+MODEL = 'Deeplab'
 
 palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190, 153, 153, 153, 153, 153, 250, 170, 30,
            220, 220, 0, 107, 142, 35, 152, 251, 152, 70, 130, 180, 220, 20, 60, 255, 0, 0, 0, 0, 142, 0, 0, 70,
@@ -49,7 +51,6 @@ def colorize_mask(mask):
     # mask: numpy array of the mask
     new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
     new_mask.putpalette(palette)
-
     return new_mask
 
 def get_arguments():
@@ -96,7 +97,7 @@ def main():
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-    if args.model == 'DeeplabMulti':
+    if args.model == 'Deeplab':
         model = DeeplabMulti(num_classes=args.num_classes, train_bn = False, norm_style = 'in')
     elif args.model == 'Oracle':
         model = Res_Deeplab(num_classes=args.num_classes)

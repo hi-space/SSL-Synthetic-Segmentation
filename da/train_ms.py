@@ -22,6 +22,7 @@ from utils.loss import CrossEntropy2d
 from utils.tool import adjust_learning_rate, adjust_learning_rate_D, Timer 
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
+from config import CONSTS
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -32,13 +33,13 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 16
 ITER_SIZE = 1
 NUM_WORKERS = 2
-DATA_DIRECTORY = './data/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+DATA_DIRECTORY = CONSTS.GTA_PATH
+DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
 DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = './data/Cityscapes/data'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
+DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640, 360'
 LEARNING_RATE = 2.5e-4

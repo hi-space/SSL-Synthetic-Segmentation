@@ -12,6 +12,9 @@ from dataset.autoaugment import ImageNetPolicy
 import imageio
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+sys.path.insert(1, os.path.realpath(os.path.pardir))
+from config import CONSTS
+
 
 class SynthiaDataSet(data.Dataset):
     def __init__(self, root, list_path, max_iters=None, resize_size=(1024, 512), crop_size=(512, 1024), mean=(128, 128, 128), scale=False, mirror=True, ignore_label=255, autoaug = False):
@@ -107,7 +110,7 @@ class SynthiaDataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = SynthiaDataSet('./data/synthia/', './dataset/synthia_list/train.txt', mean=(0,0,0), autoaug=True)
+    dst = SynthiaDataSet(CONSTS.SYNTHIA_PATH, CONSTS.SYNTHIA_TRAIN_LIST_PATH, mean=(0,0,0), autoaug=True)
     trainloader = data.DataLoader(dst, batch_size=4)
     for i, data in enumerate(trainloader):
         imgs, _, _, _ = data

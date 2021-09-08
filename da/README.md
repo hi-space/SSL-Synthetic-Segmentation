@@ -1,6 +1,4 @@
-## Seg_Uncertainty
-![Python 3.6](https://img.shields.io/badge/python-3.6-green.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+## [Seg_Uncertainty](https://arxiv.org/pdf/1912.11164.pdf)
 
 ![](https://github.com/layumi/Seg_Uncertainty/blob/master/Visual.jpg)
 
@@ -11,15 +9,19 @@ In this repo, we provide the code for the two papers, i.e.,
 - MRNet+Rectifying: [Rectifying Pseudo Label Learning via Uncertainty Estimation for Domain Adaptive Semantic Segmentation](https://arxiv.org/pdf/2003.03773.pdf), IJCV (2021) [[中文介绍]](https://zhuanlan.zhihu.com/p/130220572)
 
 ## Table of contents
-* [CommonQ&A](#common-qa)
-* [The Core Code](#the-core-code)
-* [Prerequisites](#prerequisites)
-* [Prepare Data](#prepare-data)
-* [Training](#training)
-* [Testing](#testing)
-* [Trained Model](#trained-model)
-* [Related Works](#related-works)
-* [Citation](#citation)
+- [Seg_Uncertainty](#seg_uncertainty)
+- [Table of contents](#table-of-contents)
+  - [News](#news)
+  - [Common Q&A](#common-qa)
+  - [The Core Code](#the-core-code)
+  - [Prerequisites](#prerequisites)
+  - [Prepare Data](#prepare-data)
+  - [Training](#training)
+  - [Testing](#testing)
+  - [Trained Model](#trained-model)
+  - [One Note for SYNTHIA-to-Cityscapes](#one-note-for-synthia-to-cityscapes)
+  - [Related Works](#related-works)
+  - [Citation](#citation)
 
 ### News
 - [5 Sep 2021] Zheng etal. apply the Uncertainty to domain adaptive reid, and also achieve good performance. "Exploiting Sample Uncertainty for Domain Adaptive Person Re-Identification" Kecheng Zheng, Cuiling Lan, Wenjun Zeng, Zhizheng Zhang, and Zheng-Jun Zha. AAAI 2021

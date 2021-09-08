@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import sys
 import numpy as np
 import random
 import matplotlib.pyplot as plt
@@ -9,6 +10,9 @@ import torchvision
 from torch.utils import data
 from PIL import Image, ImageFile
 from dataset.autoaugment import ImageNetPolicy
+
+sys.path.insert(1, os.path.realpath(os.path.pardir))
+from config import CONSTS
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -105,7 +109,7 @@ class GTA5DataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = GTA5DataSet('./data/GTA5/', './dataset/gta5_list/train.txt', mean=(0,0,0), autoaug=True)
+    dst = GTA5DataSet(CONSTS.GTA_PATH, CONSTS.GTA_TRAIN_LIST_PATH, mean=(0,0,0), autoaug=True)
     trainloader = data.DataLoader(dst, batch_size=4)
     for i, data in enumerate(trainloader):
         imgs, _, _, _ = data
