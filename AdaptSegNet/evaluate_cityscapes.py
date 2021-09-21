@@ -22,14 +22,15 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = '/data/cityscapes'
+DATA_DIRECTORY = '/media/yoo/yoo_data/data/cityscapes'
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 SAVE_PATH = './result/cityscapes'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+RESTORE_FROM = './snapshots/pretrain.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 SET = 'val'
@@ -70,7 +71,7 @@ def get_arguments():
                         help="Number of classes to predict (including background).")
     parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
                         help="Where restore model parameters from.")
-    parser.add_argument("--gpu", type=int, default=0,
+    parser.add_argument("--gpu", type=int, default=1,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
@@ -90,6 +91,7 @@ def main():
         os.makedirs(args.save)
 
     if args.model == 'DeeplabMulti':
+        print('load model: ', args.restore_from)
         model = DeeplabMulti(num_classes=args.num_classes)
     elif args.model == 'Oracle':
         model = Res_Deeplab(num_classes=args.num_classes)
@@ -111,9 +113,12 @@ def main():
     model.eval()
     model.cuda(gpu0)
 
-    testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(192, 384), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
-                                    batch_size=1, shuffle=False, pin_memory=True, num_workers=4)
+    # testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(192, 384), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+    #                                 batch_size=1, shuffle=False, pin_memory=True, num_workers=4)
 
+
+    testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+                                    batch_size=1, shuffle=False, pin_memory=True, num_workers=4)
 
     if version.parse(torch.__version__) >= version.parse('0.4.0'):
         interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
@@ -123,7 +128,8 @@ def main():
     for index, batch in enumerate(testloader):
         if index % 100 == 0:
             print ('%d processd' % index)
-        image, _, _, name = batch
+        # image, _, _, name = batch
+        image, _, name = batch
         if args.model == 'DeeplabMulti':
             output1, output2 = model(Variable(image, volatile=True).cuda(gpu0))
             output = interp(output2).cpu().data[0].numpy()

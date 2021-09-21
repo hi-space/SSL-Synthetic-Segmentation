@@ -29,14 +29,14 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = '/data/gta'
+DATA_DIRECTORY = '/media/yoo/yoo_data/data/gta'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = '/data/cityscapes'
+DATA_DIRECTORY_TARGET = '/media/yoo/yoo_data/data/cityscapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
-CROP_SIZE = '384,192'
+CROP_SIZE = '1024,512' # 640,360
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
@@ -46,7 +46,7 @@ POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 5000
+SAVE_PRED_EVERY = 3000
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 
@@ -136,7 +136,7 @@ def get_arguments():
                         help="Where to save snapshots of the model.")
     parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
                         help="Regularisation parameter for L2-loss.")
-    parser.add_argument("--gpu", type=int, default=0,
+    parser.add_argument("--gpu", type=int, default=1,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose adaptation set.")
@@ -192,13 +192,13 @@ def main():
     """Create the model and start the training."""
 
     w, h = map(int, args.input_size.split(','))
-    args.input_size = (w, h)
+    input_size = (w, h)
 
     w, h = map(int, args.crop_size.split(','))
     args.crop_size = (h, w)
 
     w, h = map(int, args.input_size_target.split(','))
-    args.input_size_target = (w, h)
+    input_size_target = (w, h)
 
     cudnn.enabled = True
     gpu = args.gpu
@@ -221,18 +221,17 @@ def main():
             if args.restore_from[:4] == 'http' :
                 if i_parts[1] !='fc' and i_parts[1] !='layer5':
                     new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                    print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
+                    # print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
                 
                 model.load_state_dict(new_params)
             else:
-                model.load_state_dict(saved_state_dict['model_state_dict'])
                 #new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                # if i_parts[0] =='module':
-                #     new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                #     print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
-                # else:
-                #     new_params['.'.join(i_parts[0:])] = saved_state_dict[i]
-                #     print('%s is loaded from pre-trained weight.\n'%i_parts[0:])
+                if i_parts[0] =='module':
+                    new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+                    # print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
+                else:
+                    new_params['.'.join(i_parts[0:])] = saved_state_dict[i]
+                    # print('%s is loaded from pre-trained weight.\n'%i_parts[0:])
 
 
     model.train()
@@ -267,6 +266,23 @@ def main():
                                                      set=args.set, autoaug = args.autoaug_target),
                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                    pin_memory=True, drop_last=True)
+
+    # trainloader = data.DataLoader(
+    #     GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
+    #                 crop_size=input_size,
+    #                 scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
+    #     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+
+    # trainloader_iter = enumerate(trainloader)
+
+    # targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+    #                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
+    #                                                  crop_size=input_size_target,
+    #                                                  scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+    #                                                  set=args.set),
+    #                                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+    #                                pin_memory=True)
+
 
     targetloader_iter = enumerate(targetloader)
 
@@ -306,8 +322,8 @@ def main():
     target_label = 1
 
     start_iter = 0
-    if not args.restore_from[:4] == 'http' :
-        start_iter = saved_state_dict['epoch']
+    # if not args.restore_from[:4] == 'http' :
+    #     start_iter = saved_state_dict['epoch']
 
     for i_iter in range(start_iter, args.num_steps):
         loss_seg_value1 = 0
@@ -461,16 +477,16 @@ def main():
 
         if i_iter >= args.num_steps_stop - 1:
             print ('save model ...')
-            torch.save({
-                'epoch': i_iter,
-                'model_state_dict': model.state_dict(),
-                'loss_seg_value1': loss_seg_value1,
-                'loss_seg_value2': loss_seg_value2,
-                'loss_adv_target_value1': loss_adv_target_value1,
-                'loss_adv_target_value2': loss_adv_target_value2,
-                'loss_D_value1': loss_D_value1,
-                'loss_D_value2': loss_D_value2,
-            }, osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+            # torch.save({
+            #     'epoch': i_iter,
+            #     'model_state_dict': model.state_dict(),
+            #     'loss_seg_value1': loss_seg_value1,
+            #     'loss_seg_value2': loss_seg_value2,
+            #     'loss_adv_target_value1': loss_adv_target_value1,
+            #     'loss_adv_target_value2': loss_adv_target_value2,
+            #     'loss_D_value1': loss_D_value1,
+            #     'loss_D_value2': loss_D_value2,
+            # }, osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
 
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
             torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
