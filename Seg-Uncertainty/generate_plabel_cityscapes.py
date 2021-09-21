@@ -83,7 +83,7 @@ def get_arguments():
                         help="Where restore model parameters from.")
     parser.add_argument("--gpu", type=int, default=0,
                         help="choose gpu device.")
-    parser.add_argument("--batchsize", type=int, default=12,
+    parser.add_argument("--batchsize", type=int, default=1,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
@@ -145,11 +145,11 @@ def main():
     model.eval()
     model.cuda(gpu0)
 
-    testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+    testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(256, 512), resize_size=(512, 256), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                     batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
 
     scale = 1.25
-    testloader2 = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(round(512*scale), round(1024*scale) ), resize_size=( round(1024*scale), round(512*scale)), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+    testloader2 = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(round(256*scale), round(512*scale) ), resize_size=( round(512*scale), round(256*scale)), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                     batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
 
 

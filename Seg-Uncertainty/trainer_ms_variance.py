@@ -137,7 +137,7 @@ class AD_Trainer(nn.Module):
             count = torch.FloatTensor(self.num_classes).zero_().cuda()
             often = torch.FloatTensor(self.num_classes).zero_().cuda()
             often += 1
-            print(labels.shape)
+            
             n, h, w = labels.shape
             for i in range(self.num_classes):
                 count[i] = torch.sum(labels==i)
@@ -148,14 +148,14 @@ class AD_Trainer(nn.Module):
 
             self.often_weight = 0.9 * self.often_weight + 0.1 * often 
             self.class_weight = weight * self.often_weight
-            print(self.class_weight)
+            
             return nn.CrossEntropyLoss(weight = self.class_weight, ignore_index=255)
 
     def update_label(self, labels, prediction):
             criterion = nn.CrossEntropyLoss(weight = self.class_weight, ignore_index=255, reduction = 'none')
             #criterion = self.seg_loss
             loss = criterion(prediction, labels)
-            print('original loss: %f'% self.seg_loss(prediction, labels) )
+            # print('original loss: %f'% self.seg_loss(prediction, labels) )
             #mm = torch.median(loss)
             loss_data = loss.data.cpu().numpy()
             mm = np.percentile(loss_data[:], self.only_hard_label)

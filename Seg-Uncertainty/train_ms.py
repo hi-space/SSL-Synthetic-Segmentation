@@ -16,6 +16,8 @@ import random
 import time
 import yaml
 from tensorboardX import SummaryWriter
+import logging
+import datetime
 
 from trainer_ms import AD_Trainer
 from utils.loss import CrossEntropy2d
@@ -41,13 +43,13 @@ INPUT_SIZE = '1280,720'
 DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
 DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
-CROP_SIZE = '384,192' # 640,360
+CROP_SIZE = '640,360' # 640,360
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 MAX_VALUE = 2
 NUM_CLASSES = 19
-NUM_STEPS = 100000
-NUM_STEPS_STOP = 100000  # early stopping
+NUM_STEPS = 250000
+NUM_STEPS_STOP = 250000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
@@ -69,6 +71,20 @@ LAMBDA_KL_TARGET = 0
 TARGET = 'cityscapes'
 SET = 'train'
 NORM_STYLE = 'bn' # or in
+
+
+def get_logger(logdir):
+    print('log dir: ', logdir)
+    logger = logging.getLogger('ptsemseg')
+    ts = str(datetime.datetime.now()).split('.')[0].replace(" ", "_")
+    ts = ts.replace(":", "_").replace("-","_")
+    file_path = os.path.join(logdir, 'run_{}.log'.format(ts))
+    hdlr = logging.FileHandler(file_path)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr) 
+    logger.setLevel(logging.INFO)
+    return logger
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -166,7 +182,7 @@ def get_arguments():
     parser.add_argument("--train_bn", action='store_true', help="train batch normalization.")
     parser.add_argument("--sync_bn", action='store_true', help="sync batch normalization.")
     parser.add_argument("--often-balance", action='store_true', help="balance the apperance times.")
-    parser.add_argument("--gpu-ids", type=str, default='0', help = 'choose gpus')
+    parser.add_argument("--gpu-ids", type=str, default='0,1', help = 'choose gpus')
     parser.add_argument("--tensorboard", action='store_false', help="choose whether to use tensorboard.")
     parser.add_argument("--log-dir", type=str, default=LOG_DIR,
                         help="Path to the directory of log.")
@@ -176,6 +192,7 @@ def get_arguments():
 
 
 args = get_arguments()
+logger = get_logger(args.log_dir)
 
 # save opts
 if not os.path.exists(args.snapshot_dir):
@@ -209,6 +226,11 @@ def main():
             gpu_ids.append(gid)
 
     num_gpu = len(gpu_ids)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '1,0'
+
+    print('num_gpu: ', num_gpu)
+    print('gpu_ids: ', gpu_ids)
+
     args.multi_gpu = False
     if num_gpu>1:
         args.multi_gpu = True
@@ -250,7 +272,7 @@ def main():
 
         writer = SummaryWriter(args.log_dir)
 
-    for i_iter in range(args.num_steps):
+    for i_iter in range(0, args.num_steps):
 
         loss_seg_value1 = 0
         loss_adv_target_value1 = 0
@@ -315,6 +337,9 @@ def main():
             if i_iter % 100 == 0:
                 for key, val in scalar_info.items():
                     writer.add_scalar(key, val, i_iter)
+
+        logger.info(
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
 
         print(
         '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))

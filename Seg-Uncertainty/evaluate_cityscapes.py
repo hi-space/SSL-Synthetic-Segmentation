@@ -1,5 +1,5 @@
 import argparse
-from da.config import CONSTS
+from config import CONSTS
 import scipy
 from scipy import ndimage
 import numpy as np
@@ -36,7 +36,8 @@ SAVE_PATH = CONSTS.CITYSCAPES_RESULT_PATH
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+RESTORE_FROM = './snapshots/GTA_TO_CITY_CO/GTA5_204000.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 SET = 'val'
@@ -79,7 +80,7 @@ def get_arguments():
                         help="Where restore model parameters from.")
     parser.add_argument("--gpu", type=int, default=0,
                         help="choose gpu device.")
-    parser.add_argument("--batchsize", type=int, default=16,
+    parser.add_argument("--batchsize", type=int, default=1,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
@@ -135,6 +136,7 @@ def main():
         os.makedirs(args.save)
 
     if args.model == 'DeepLab':
+        print('model from: ', args.restore_from)
         model = DeeplabMulti(num_classes=args.num_classes, use_se = config['use_se'], train_bn = False, norm_style = config['norm_style'])
     elif args.model == 'Oracle':
         model = Res_Deeplab(num_classes=args.num_classes)
@@ -155,7 +157,7 @@ def main():
     except:
         model = torch.nn.DataParallel(model)
         model.load_state_dict(saved_state_dict)
-    #model = torch.nn.DataParallel(model)
+    
     model.eval()
     model.cuda(gpu0)
 
@@ -257,4 +259,4 @@ if __name__ == '__main__':
     with torch.no_grad():
         save_path = main()
     print('Time used: {} sec'.format(time.time()-tt))
-    os.system('python compute_iou.py ./data/Cityscapes/data/gtFine/val %s'%save_path)
+    # os.system('python compute_iou.py ./data/Cityscapes/data/gtFine/val %s'%save_path)
