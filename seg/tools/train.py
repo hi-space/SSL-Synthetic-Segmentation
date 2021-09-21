@@ -126,10 +126,6 @@ class Trainer(object):
         self.model.train()
         iteration = self.start_epoch * iters_per_epoch if self.start_epoch > 0 else 0
         for idx, (images, targets, base) in enumerate(self.train_loader):
-            print(idx)
-            print(images.shape, targets.shape)
-            print(base)
-            breakpoint()
             epoch = iteration // iters_per_epoch + 1
             iteration += 1
 

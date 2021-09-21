@@ -24,8 +24,8 @@ def demo():
     default_setup(args)
 
     # output folder
-    output_dir = os.path.join(cfg.VISUAL.OUTPUT_DIR, 'vis_result_{}_{}_{}_{}'.format(
-        cfg.MODEL.MODEL_NAME, cfg.MODEL.BACKBONE, cfg.DATASET.NAME, cfg.TIME_STAMP))
+    output_dir = os.path.join(cfg.VISUAL.OUTPUT_DIR, 'result_{}_{}_{}'.format(
+        cfg.MODEL.MODEL_NAME, cfg.MODEL.BACKBONE, cfg.DATASET.NAME))
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -39,10 +39,13 @@ def demo():
     model.eval()
 
     if os.path.isdir(args.input_img):
-        img_paths = [os.path.join(args.input_img, x) for x in os.listdir(args.input_img)]
+        # img_paths = [os.path.join(args.input_img, x) for x in os.listdir(args.input_img)]
+        img_paths = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.walk(args.input_img)] for val in sublist]
     else:
         img_paths = [args.input_img]
+
     for img_path in img_paths:
+        print(img_path)
         image = Image.open(img_path).convert('RGB')
         images = transform(image).unsqueeze(0).to(args.device)
         with torch.no_grad():

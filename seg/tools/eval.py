@@ -22,13 +22,14 @@ from segmentron.utils.distributed import synchronize, make_data_sampler, make_ba
 from segmentron.config import cfg
 from segmentron.utils.options import parse_args
 from segmentron.utils.default_setup import default_setup
+from segmentron.utils.visualize import get_color_pallete
 
 
 class Evaluator(object):
     def __init__(self, args):
         self.args = args
         self.device = torch.device(args.device)
-
+        
         # image transform
         input_transform = transforms.Compose([
             transforms.ToTensor(),
@@ -73,8 +74,10 @@ class Evaluator(object):
             model = self.model
 
         logging.info("Start validation, Total sample: {:d}".format(len(self.val_loader)))
+
         import time
         time_start = time.time()
+
         for i, (image, target, filename) in enumerate(self.val_loader):
             image = image.to(self.device)
             target = target.to(self.device)

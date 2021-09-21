@@ -10,8 +10,8 @@ TRAIN:
   CROP_SIZE: 769
 TEST:
   BATCH_SIZE: 4
-  CROP_SIZE: (1025, 2049)
   # CROP_SIZE: (1053, 1915)
+  CROP_SIZE: (640, 360)
 #    TEST_MODEL_PATH: trained_models/deeplabv3_plus_resnet101_segmentron.pth
 
 SOLVER:
@@ -19,5 +19,5 @@ SOLVER:
 
 MODEL:
   MODEL_NAME: "DeepLabV3_Plus"
-  BACKBONE: "resnet50"
-  # BACKBONE: "resnet101"
+  # BACKBONE: "resnet50"
+  BACKBONE: "resnet101"

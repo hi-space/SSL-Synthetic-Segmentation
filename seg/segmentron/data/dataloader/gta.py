@@ -42,12 +42,12 @@ class GTASegmentation(SegmentationDataset):
 
     label_colours = dict(zip(range(NUM_CLASS), colors))
 
-    def __init__(self, root='/data/paper/dataset', split='train', mode=None, transform=None, **kwargs):
-        # self.img_size = (2049, 1025)
-        self.img_size = (1914, 1052)
+    def __init__(self, root='/content/gdrive/MyDrive/data/gta', split='train', mode=None, transform=None, **kwargs):
+        # self.img_size = (1914, 1052)
+        self.img_size = (640, 360)
 
         super(GTASegmentation, self).__init__(root, split, mode, transform, **kwargs)
-        self.root = os.path.join(root, self.BASE_DIR)
+        # self.root = os.path.join(root, self.BASE_DIR)
         print(self.root)
         assert os.path.exists(self.root), "Please put dataset in {SEG_ROOT}/datasets/gta"
         self.images, self.mask_paths = _get_gta_pairs(self.root, self.split)
@@ -81,7 +81,6 @@ class GTASegmentation(SegmentationDataset):
         mask = Image.open(self.mask_paths[index])
 
         # print(np.unique(np.array(mask)))
-
         # mask = Image.fromarray(self.encoder(np.array(mask, dtype=np.uint8)))
         
         img = img.resize(self.img_size, Image.BILINEAR)

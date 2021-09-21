@@ -9,7 +9,7 @@ TRAIN:
 TEST:
     BATCH_SIZE: 4
     CROP_SIZE: (1025, 2049)
-    TEST_MODEL_PATH: /home/yoo/workspace/SegmenTron/runs/checkpoints/DeepLabV3_Plus_resnet50_cityscape_2021-04-02-14-03/best_model.pth
+    TEST_MODEL_PATH: /home/yoo/workspace/SSL-Synthetic-Segmentation/seg/checkpoints/deeplabv3_plus_resnet101_segmentron.pth
     # TEST_MODEL_PATH: /home/yoo/Downloads/deeplabv3_plus_resnet101_segmentron.pth
     
 SOLVER:
@@ -17,6 +17,6 @@ SOLVER:
 
 MODEL:
     MODEL_NAME: "DeepLabV3_Plus"
-    BACKBONE: "resnet50"
+    BACKBONE: "resnet101"
     # BACKBONE: "resnet50"
 

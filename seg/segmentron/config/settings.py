@@ -58,7 +58,7 @@ cfg.TRAIN.RESUME_MODEL_PATH = ''
 # whether to use synchronize bn
 cfg.TRAIN.SYNC_BATCH_NORM = True
 # save model every checkpoint-epoch
-cfg.TRAIN.SNAPSHOT_EPOCH = 10
+cfg.TRAIN.SNAPSHOT_EPOCH = 1
 
 ########################### optimizer config ##################################
 # base learning rate
@@ -109,7 +109,7 @@ cfg.TEST.FLIP = False
 
 ########################## visual config ###########################################
 # visual result output dir
-cfg.VISUAL.OUTPUT_DIR = '../runs/visual/'
+cfg.VISUAL.OUTPUT_DIR = './runs/result/'
 
 ########################## model #######################################
 # model name
