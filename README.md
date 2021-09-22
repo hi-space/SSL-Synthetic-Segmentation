@@ -6,6 +6,10 @@ Self-supervised learning with image based synthetic teacher model
 
 # References
 
+- [SegmenTron](https://github.com/LikeLy-Journey/SegmenTron)
+- [Seg-Uncertainty](https://github.com/layumi/Seg-Uncertainty)
+- [AdaptSegNet](https://github.com/wasidennis/AdaptSegNet)
+
 ## Codes 
 
 - [deeplab v3+](https://github.com/jfzhang95/pytorch-deeplab-xception)
