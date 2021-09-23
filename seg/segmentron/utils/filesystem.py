@@ -7,14 +7,14 @@ import logging
 
 from ..config import cfg
 
-def save_checkpoint(model, epoch, optimizer=None, lr_scheduler=None, is_best=False):
+def save_checkpoint(model, epoch, iteration=0, optimizer=None, lr_scheduler=None, is_best=False):
     """Save Checkpoint"""
     directory = os.path.expanduser(cfg.TRAIN.MODEL_SAVE_DIR)
     directory = os.path.join(directory, '{}_{}_{}_{}'.format(cfg.MODEL.MODEL_NAME, cfg.MODEL.BACKBONE,
                                                              cfg.DATASET.NAME, cfg.TIME_STAMP))
     if not os.path.exists(directory):
         os.makedirs(directory)
-    filename = '{}.pth'.format(str(epoch))
+    filename = '{}_{}.pth'.format(str(epoch), str(iteration))
     filename = os.path.join(directory, filename)
     model_state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
     if is_best:
@@ -24,6 +24,7 @@ def save_checkpoint(model, epoch, optimizer=None, lr_scheduler=None, is_best=Fal
     else:
         save_state = {
             'epoch': epoch,
+            'iteration': iteration,
             'state_dict': model_state_dict,
             'optimizer': optimizer.state_dict(),
             'lr_scheduler': lr_scheduler.state_dict()

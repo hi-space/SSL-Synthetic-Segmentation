@@ -5,9 +5,11 @@ import scipy.io as io
 import numpy as np
 import logging
 
-from PIL import Image
+from PIL import Image, ImageFile
 from .seg_data_base import SegmentationDataset
 
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class GTASegmentation(SegmentationDataset):
     BASE_DIR = 'gtav'
@@ -42,7 +44,7 @@ class GTASegmentation(SegmentationDataset):
 
     label_colours = dict(zip(range(NUM_CLASS), colors))
 
-    def __init__(self, root='/content/gdrive/MyDrive/data/gta', split='train', mode=None, transform=None, **kwargs):
+    def __init__(self, root='/home/yoo/data/gta', split='train', mode=None, transform=None, **kwargs):
         # self.img_size = (1914, 1052)
         self.img_size = (640, 360)
 
@@ -55,13 +57,13 @@ class GTASegmentation(SegmentationDataset):
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images in subfolders of:" + root + "\n")
         self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22,
-                              23, 24, 25, 26, 27, 28, 31, 32, 33, 34]
+                              23, 24, 25, 26, 27, 28, 31, 32, 33]
         self._key = np.array([-1, -1, -1, -1, -1, -1,
                               -1, -1, 0, 1, -1, -1,
                               2, 3, 4, -1, -1, -1,
                               5, -1, 6, 7, 8, 9,
                               10, 11, 12, 13, 14, 15,
-                              -1, -1, 16, 17, 18, -1])
+                              -1, -1, 16, 17, 18])
         self._mapping = np.array(range(-1, len(self._key) - 1)).astype('int32')
 
     def _class_to_index(self, mask):
@@ -117,31 +119,6 @@ class GTASegmentation(SegmentationDataset):
         return ('road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
                 'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
                 'truck', 'bus', 'train', 'motorcycle', 'bicycle')
-
-
-    def encoder(self, lbl):
-        # for _i in self.void_classes:
-        #     lbl[lbl == _i] = self.ignore_index
-        # for _i in self.valid_classes:
-        #     lbl[lbl == _i] = self.class_map[_i]
-        for _i in self.valid_classes:
-            lbl[lbl == _i] = self.class_map[_i]
-        return lbl
-
-    def decoder(self, temp):
-        r = temp.copy()
-        g = temp.copy()
-        b = temp.copy()
-        for l in range(0, self.n_classes):
-            r[temp == l] = self.label_colours[l][0]
-            g[temp == l] = self.label_colours[l][1]
-            b[temp == l] = self.label_colours[l][2]
-
-        rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
-        rgb[:, :, 0] = r / 255.0
-        rgb[:, :, 1] = g / 255.0
-        rgb[:, :, 2] = b / 255.0
-        return rgb
 
 
 def _get_gta_pairs(folder, split='train'):

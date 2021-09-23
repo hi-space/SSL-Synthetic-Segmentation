@@ -10,7 +10,7 @@ class CONSTS:
     CITYSCAPES_PSEUDO_PATH      = './pseudo/cityscapes/'
 
     # GTA
-    GTA_PATH                    = '/home/yoo/data/gta'
+    GTA_PATH                    = '/home/yoo/data/cyclegta5'
     GTA_TRAIN_LIST_PATH         = './dataset/gta5_list/train.txt'
     GTA_RESULT_PATH             = './result/GTA5'
 

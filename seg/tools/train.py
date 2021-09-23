@@ -92,6 +92,7 @@ class Trainer(object):
 
         # resume checkpoint if needed
         self.start_epoch = 0
+        self.start_iter = 0
         if args.resume and os.path.isfile(args.resume):
             name, ext = os.path.splitext(args.resume)
             assert ext == '.pkl' or '.pth', 'Sorry only .pth and .pkl files supported.'
@@ -99,7 +100,8 @@ class Trainer(object):
             resume_sate = torch.load(args.resume)
             self.model.load_state_dict(resume_sate['state_dict'])
             self.start_epoch = resume_sate['epoch']
-            logging.info('resume train from epoch: {}'.format(self.start_epoch))
+            self.start_iter = resume_sate['iteration']
+            logging.info('resume train from epoch: {} / iteration: {}'.format(self.start_epoch, self.start_iter))
             if resume_sate['optimizer'] is not None and resume_sate['lr_scheduler'] is not None:
                 logging.info('resume optimizer and lr scheduler from resume state..')
                 self.optimizer.load_state_dict(resume_sate['optimizer'])
@@ -124,7 +126,7 @@ class Trainer(object):
         logging.info('Start training, Total Epochs: {:d} = Total Iterations {:d}'.format(epochs, max_iters))
 
         self.model.train()
-        iteration = self.start_epoch * iters_per_epoch if self.start_epoch > 0 else 0
+        iteration = self.start_iter if self.start_epoch > 0 else 0
         for idx, (images, targets, base) in enumerate(self.train_loader):
             epoch = iteration // iters_per_epoch + 1
             iteration += 1
@@ -159,8 +161,8 @@ class Trainer(object):
                         str(datetime.timedelta(seconds=int(time.time() - start_time))),
                         eta_string))
 
-            if iteration % self.iters_per_epoch == 0 and self.save_to_disk:
-                save_checkpoint(self.model, epoch, self.optimizer, self.lr_scheduler, is_best=False)
+            if iteration % 1000 == 0 and self.save_to_disk:
+                save_checkpoint(self.model, epoch, iteration % self.iters_per_epoch, self.optimizer, self.lr_scheduler, is_best=False)
 
             if not self.args.skip_val and iteration % val_per_iters == 0:
                 self.validation(epoch)

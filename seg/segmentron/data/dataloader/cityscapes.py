@@ -4,9 +4,11 @@ import torch
 import numpy as np
 import logging
 
-from PIL import Image
+from PIL import Image, ImageFile
 from .seg_data_base import SegmentationDataset
 
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class CitySegmentation(SegmentationDataset):
     """Cityscapes Semantic Segmentation Dataset.
@@ -38,7 +40,7 @@ class CitySegmentation(SegmentationDataset):
     BASE_DIR = 'citys'
     NUM_CLASS = 19
 
-    def __init__(self, root='/content/gdrive/MyDrive/data/citys', split='train', mode=None, transform=None, **kwargs):
+    def __init__(self, root='/home/yoo/data/cityscapes', split='train', mode=None, transform=None, **kwargs):
         super(CitySegmentation, self).__init__(root, split, mode, transform, **kwargs)
         # self.root = os.path.join(root, self.BASE_DIR)
         self.root = root

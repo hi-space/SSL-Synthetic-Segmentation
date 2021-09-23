@@ -54,8 +54,10 @@ class SegmentationDataset(object):
         else:
             ow = short_size
             oh = int(1.0 * h * ow / w)
+
         img = img.resize((ow, oh), Image.BILINEAR)
         mask = mask.resize((ow, oh), Image.NEAREST)
+
         # center crop
         w, h = img.size
         x1 = int(round((w - outsize[1]) / 2.))
