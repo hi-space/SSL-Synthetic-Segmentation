@@ -30,16 +30,23 @@ torch.backends.cudnn.benchmark=True
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
-DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
 SAVE_PATH = CONSTS.CITYSCAPES_RESULT_PATH
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
-NUM_STEPS = 500 # Number of images in the validation set.
+
 # RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
 RESTORE_FROM = './snapshots/GTA_TO_CITY_CO/GTA5_204000.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
+
+# NUM_STEPS = 19998 # Number of images in the validation set.
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+# SET = 'trainextra'
+
+# val
+NUM_STEPS = 500 # Number of images in the validation set.
+DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
 SET = 'val'
 
 MODEL = 'Deeplab'
@@ -185,48 +192,31 @@ def main():
         batch, batch2, batch3 = img_data
         image, _, _, name = batch
         image2, _, _, name2 = batch2
-        #image3, _, _, name3 = batch3
 
         inputs = image.cuda()
         inputs2 = image2.cuda()
-        #inputs3 = Variable(image3).cuda()
         print('\r>>>>Extracting feature...%03d/%03d'%(index*batchsize, NUM_STEPS), end='')
         if args.model == 'DeepLab':
             with torch.no_grad():
                 output1, output2 = model(inputs)
                 output_batch = interp(sm(0.5* output1 + output2))
                 heatmap_output1, heatmap_output2 = output1, output2
-                #output_batch = interp(sm(output1))
-                #output_batch = interp(sm(output2))
                 output1, output2 = model(fliplr(inputs))
                 output1, output2 = fliplr(output1), fliplr(output2)
                 output_batch += interp(sm(0.5 * output1 + output2))
                 heatmap_output1, heatmap_output2 = heatmap_output1+output1, heatmap_output2+output2
-                #output_batch += interp(sm(output1))
-                #output_batch += interp(sm(output2))
                 del output1, output2, inputs
 
                 output1, output2 = model(inputs2)
                 output_batch += interp(sm(0.5* output1 + output2))
-                #output_batch += interp(sm(output1))
-                #output_batch += interp(sm(output2))
                 output1, output2 = model(fliplr(inputs2))
                 output1, output2 = fliplr(output1), fliplr(output2)
                 output_batch += interp(sm(0.5 * output1 + output2))
-                #output_batch += interp(sm(output1))
-                #output_batch += interp(sm(output2))
                 del output1, output2, inputs2
                 output_batch = output_batch.cpu().data.numpy()
                 heatmap_batch = torch.sum(kl_distance(log_sm(heatmap_output1), sm(heatmap_output2)), dim=1) 
                 heatmap_batch = torch.log(1 + 10*heatmap_batch) # for visualization
                 heatmap_batch = heatmap_batch.cpu().data.numpy()
-
-                #output1, output2 = model(inputs3)
-                #output_batch += interp(sm(0.5* output1 + output2)).cpu().data.numpy()
-                #output1, output2 = model(fliplr(inputs3))
-                #output1, output2 = fliplr(output1), fliplr(output2)
-                #output_batch += interp(sm(0.5 * output1 + output2)).cpu().data.numpy()
-                #del output1, output2, inputs3
         elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
             output_batch = model(Variable(image).cuda())
             output_batch = interp(output_batch).cpu().data.numpy()
