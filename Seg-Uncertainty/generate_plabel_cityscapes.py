@@ -30,8 +30,19 @@ torch.backends.cudnn.benchmark=True
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
-DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
-SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'train'
+
+# train
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'train'
+# SET = 'train' # We generate pseudo label for training set
+# NUM_STEPS = 2975 # Number of images in the training set.
+
+# trainextra
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'trainextra'
+SET = 'trainextra'
+NUM_STEPS = 19998
+
 
 if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
     os.mkdir(CONSTS.CITYSCAPES_PSEUDO_PATH)
@@ -39,11 +50,10 @@ if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
-NUM_STEPS = 2975 # Number of images in the validation set.
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
-SET = 'train' # We generate pseudo label for training set
+
 
 MODEL = 'DeeplabMulti'
 
@@ -166,7 +176,6 @@ def main():
         batch, batch2 = img_data
         image, _, _, name = batch
         image2, _, _, name2 = batch2
-        print(image.shape)
 
         inputs = image.cuda()
         inputs2 = image2.cuda()
@@ -180,7 +189,7 @@ def main():
 
                 output1, output2 = model(fliplr(inputs))
                 output1, output2 = fliplr(output1), fliplr(output2)
-                output_batch += interp(sm(0.5 * output1 + output2))
+                output_batch += interp(sm(0.5 * output1 + output2)) 
                 del output1, output2, inputs
 
                 output1, output2 = model(inputs2)
@@ -189,8 +198,10 @@ def main():
                 output1, output2 = fliplr(output1), fliplr(output2)
                 output_batch += interp(sm(0.5 * output1 + output2))
                 del output1, output2, inputs2
+
                 output_batch = output_batch.cpu().data.numpy()
                 heatmap_batch = heatmap_batch.cpu().data.numpy()
+
         elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
             output_batch = model(Variable(image).cuda())
             output_batch = interp(output_batch).cpu().data.numpy()

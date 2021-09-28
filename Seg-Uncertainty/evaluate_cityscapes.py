@@ -40,14 +40,15 @@ RESTORE_FROM = './snapshots/GTA_TO_CITY_CO/GTA5_204000.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 
-# NUM_STEPS = 19998 # Number of images in the validation set.
-# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
-# SET = 'trainextra'
+# trainextra
+NUM_STEPS = 19998 # Number of images in the validation set.
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+SET = 'trainextra'
 
 # val
-NUM_STEPS = 500 # Number of images in the validation set.
-DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
-SET = 'val'
+# NUM_STEPS = 500 # Number of images in the validation set.
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
+# SET = 'val'
 
 MODEL = 'Deeplab'
 
