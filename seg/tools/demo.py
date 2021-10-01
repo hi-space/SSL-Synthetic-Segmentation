@@ -45,16 +45,27 @@ def demo():
         img_paths = [args.input_img]
 
     for img_path in img_paths:
-        print(img_path)
         image = Image.open(img_path).convert('RGB')
         images = transform(image).unsqueeze(0).to(args.device)
         with torch.no_grad():
             output = model(images)
 
-        pred = torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()
+        pred = torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()        
         mask = get_color_pallete(pred, cfg.DATASET.NAME)
-        outname = os.path.splitext(os.path.split(img_path)[-1])[0] + '.png'
-        mask.save(os.path.join(output_dir, outname))
+
+        folder_name = os.path.dirname(img_path).split('/')[-1]
+        if not os.path.isdir(os.path.join(output_dir, folder_name)):
+            os.mkdir(os.path.join(output_dir, folder_name))
+
+        outname = (os.path.splitext(os.path.split(img_path)[-1])[0]).replace('leftImg8bit', '')
+
+        save_path = os.path.join(output_dir, folder_name, outname) 
+
+        print(save_path)
+
+        mask.save(save_path + 'gtFine_color.png')
+
+        Image.fromarray(pred.astype('uint8')).save(save_path + 'gtFine_labelIds.png')
 
 
 if __name__ == '__main__':
