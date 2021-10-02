@@ -40,22 +40,13 @@ class cityscapesDataSet(data.Dataset):
         # for split in ["train", "trainval", "val"]:
          
         #https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/helpers/labels.py
-        '''
-        project Cityscapes to Oxford Robot
-        7 road -> 8;  8 sidewalk -> 7; building 11 -> 6; wall 12 -> 255;
-        fence 13 -> 255; pole 17-> 255: light 19 -> 5; sign 20->4;
-        vegetation -> 255; terrain -> 255; sky 23 -> 0; person 24 -> 1 ;
-        rider 25 -> 1 ; car 26 -> 3; truck 27 ->3; bus 28 ->3; train 31->255;
-        motorcycle 32->2 ; bike 33 -> 2;
-
-        '''
-        self.id_to_trainid = {7: 8, 8: 7, 11: 6, 
-                              19: 5, 20: 4, 23: 0, 24: 1, 25: 1,
-                              26: 3, 27: 3, 28: 3, 32: 2, 33: 2}
+        self.id_to_trainid = {7: 0, 8: 1, 11: 2, 12: 3, 13: 4, 17: 5,
+                              19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11, 25: 12,
+                              26: 13, 27: 14, 28: 15, 31: 16, 32: 17, 33: 18}
 
         for name in self.img_ids:
             img_file = osp.join(self.root, "leftImg8bit/%s/%s" % (self.set, name))
-            label_file = osp.join(self.root, "gtFine/%s/%s" % (self.set, name.replace('leftImg8bit', 'gtFine_labelIds') ))
+            label_file = osp.join(self.root, "gtFine/%s/%s" % (self.set, name))
             self.files.append({
                 "img": img_file,
                 "label": label_file,
