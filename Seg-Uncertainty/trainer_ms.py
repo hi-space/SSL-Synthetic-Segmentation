@@ -192,22 +192,13 @@ class AD_Trainer(nn.Module):
             pred_target2 = self.interp_target(pred_target2)
 
             if self.multi_gpu:
-                #if self.lambda_adv_target1 > 0 and self.lambda_adv_target2 > 0:
                 loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
                 loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-                #else:
-                #    print('skip the discriminator')
-                #    loss_adv_target1, loss_adv_target2 = 0, 0 
             else:
-                #if self.lambda_adv_target1 > 0 and self.lambda_adv_target2 > 0:
                 loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
                 loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-                #else:
-                #loss_adv_target1 = 0.0 #torch.tensor(0).cuda() 
-                #loss_adv_target2 = 0.0 #torch.tensor(0).cuda()
 
             loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
-
 
             if i_iter < 15000:
                 self.lambda_kl_target_copy = 0
@@ -226,13 +217,9 @@ class AD_Trainer(nn.Module):
             if self.lambda_kl_target_copy>0:
                 n, c, h, w = pred_target1.shape
                 with torch.no_grad():
-                    #pred_target1_flip, pred_target2_flip = self.G(fliplr(images_t))
-                    #pred_target1_flip = self.interp_target(pred_target1_flip)
-                    #pred_target2_flip = self.interp_target(pred_target2_flip)
                     mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
                 loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
-                #loss_kl = (self.kl_loss(self.log_sm(pred_target2) , self.sm(pred_target1) ) ) / (n*h*w) + (self.kl_loss(self.log_sm(pred_target1) , self.sm(pred_target2)) ) / (n*h*w)
-                print(loss_kl)
+
                 loss += self.lambda_kl_target * loss_kl
 
             if self.fp16:
@@ -249,8 +236,10 @@ class AD_Trainer(nn.Module):
     def dis_update(self, pred1, pred2, pred_target1, pred_target2):
             self.dis1_opt.zero_grad()
             self.dis2_opt.zero_grad()
+
             pred1 = pred1.detach()
             pred2 = pred2.detach()
+            
             pred_target1 = pred_target1.detach()
             pred_target2 = pred_target2.detach()
 

@@ -49,6 +49,7 @@ class GTA5DataSet(data.Dataset):
                 "label": label_file,
                 "name": name
             })
+        
 
     def __len__(self):
         return len(self.files)

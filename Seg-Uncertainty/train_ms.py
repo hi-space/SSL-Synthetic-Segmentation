@@ -26,6 +26,12 @@ from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from config import CONSTS
 
+import torchvision
+import matplotlib
+import matplotlib.pyplot as plt
+
+matplotlib.use('TkAgg')
+
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 AUTOAUG = False
@@ -188,6 +194,7 @@ def get_arguments():
                         help="Path to the directory of log.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose adaptation set.")
+    parser.add_argument("--vis-data", action='store_true', help="visuazlie dataloader")
     return parser.parse_args()
 
 
@@ -272,7 +279,13 @@ def main():
 
         writer = SummaryWriter(args.log_dir)
 
-    for i_iter in range(0, args.num_steps):
+    if args.vis_data:    
+        fig = plt.figure('dataloader')
+        ax1, ax2 = fig.add_subplot(2, 1, 1), fig.add_subplot(2, 1, 2)
+        ax1.axis('off'), ax2.axis('off')
+        ax1.set_title('GTA'), ax2.set_title('Cityscapes')
+
+    for i_iter in range(35001, args.num_steps):
 
         loss_seg_value1 = 0
         loss_adv_target_value1 = 0
@@ -281,7 +294,6 @@ def main():
         loss_seg_value2 = 0
         loss_adv_target_value2 = 0
         loss_D_value2 = 0
-
 
         adjust_learning_rate(Trainer.gen_opt , i_iter, args)
         adjust_learning_rate_D(Trainer.dis1_opt, i_iter, args)
@@ -299,10 +311,17 @@ def main():
             images, labels, _, _ = batch
             images = images.cuda()
             labels = labels.long().cuda()
+
             images_t, labels_t, _, _ = batch_t
             images_t = images_t.cuda()
             labels_t = labels_t.long().cuda()
 
+            if args.vis_data:
+                ax1.imshow(torchvision.utils.make_grid(images.cpu(), normalize=True).permute(1,2,0))
+                ax2.imshow(torchvision.utils.make_grid(images_t.cpu(), normalize=True).permute(1,2,0))
+                plt.draw()
+                plt.pause(0.001)
+            
             with Timer("Elapsed time in update: %f"):
                 loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss = Trainer.gen_update(images, images_t, labels, labels_t, i_iter)
                 loss_seg_value1 += loss_seg1.item() / args.iter_size

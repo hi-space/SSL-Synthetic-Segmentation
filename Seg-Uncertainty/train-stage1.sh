@@ -22,7 +22,8 @@
 #    --restore-from ./snapshots/GTA_TO_CITY/GTA5_150000.pth
 
 python train_ms.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b1  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_multiaug  \
+    --restore-from ./snapshots/aagc_640x360_b2_multiaug/GTA5_35000.pth \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \
@@ -39,4 +40,7 @@ python train_ms.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se  
+    --use-se \
+    --autoaug \
+    --autoaug_target \
+    --vis-data
