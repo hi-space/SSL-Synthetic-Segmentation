@@ -93,6 +93,7 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
+    parser.add_argument("--randaug", action='store_true', help="use augmentation or not" )
     parser.add_argument("--autoaug", action='store_true', help="use augmentation or not" )
     parser.add_argument("--autoaug_target", action='store_true', help="use augmentation or not" )
     parser.add_argument("--model", type=str, default=MODEL,
@@ -247,7 +248,7 @@ def main():
         GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
                     resize_size=args.input_size,
                     crop_size=args.crop_size,
-                    scale=True, mirror=True, mean=IMG_MEAN, autoaug = args.autoaug),
+                    scale=True, mirror=True, mean=IMG_MEAN, autoaug = args.autoaug, randaug=args.randaug),
         batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
     trainloader_iter = enumerate(trainloader)
@@ -257,10 +258,9 @@ def main():
                                                      resize_size=args.input_size_target,
                                                      crop_size=args.crop_size,
                                                      scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                     set=args.set, autoaug = args.autoaug_target),
+                                                     set=args.set, autoaug = args.autoaug_target, randaug=args.randaug),
                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                    pin_memory=True, drop_last=True)
-
 
     targetloader_iter = enumerate(targetloader)
 

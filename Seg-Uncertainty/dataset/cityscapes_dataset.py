@@ -12,6 +12,7 @@ import torchvision
 from torch.utils import data
 from PIL import Image, ImageFile
 from dataset.autoaugment import ImageNetPolicy
+from dataset.randaugment import RandAugment
 import time
 
 sys.path.insert(1, os.path.realpath(os.path.pardir))
@@ -20,7 +21,7 @@ from config import CONSTS
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class cityscapesDataSet(data.Dataset):
-    def __init__(self, root, list_path, max_iters=None, resize_size=(1024, 512), crop_size=(512, 1024), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='val', autoaug=False):
+    def __init__(self, root, list_path, max_iters=None, resize_size=(1024, 512), crop_size=(512, 1024), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='val', autoaug=False, randaug=False):
         self.root = root
         self.list_path = list_path
         self.crop_size = crop_size
@@ -30,6 +31,7 @@ class cityscapesDataSet(data.Dataset):
         self.is_mirror = mirror
         self.resize_size = resize_size
         self.autoaug = autoaug
+        self.randaug = randaug
         self.h = crop_size[0]
         self.w = crop_size[1]
         # self.mean_bgr = np.array([104.00698793, 116.66876762, 122.67891434])
@@ -68,6 +70,9 @@ class cityscapesDataSet(data.Dataset):
             if self.autoaug:
                 policy = ImageNetPolicy()
                 image = policy(image)
+
+            if self.randaug:
+                image = RandAugment(image)
 
             image = np.asarray(image, np.float32)
 

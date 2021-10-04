@@ -35,8 +35,8 @@ SAVE_PATH = CONSTS.CITYSCAPES_RESULT_PATH
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
 
-# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
-RESTORE_FROM = './snapshots/GTA_TO_CITY_CO/GTA5_204000.pth'
+RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+# RESTORE_FROM = './snapshots/GTA_TO_CITY_CO/GTA5_204000.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 
@@ -92,7 +92,7 @@ def get_arguments():
                         help="Where restore model parameters from.")
     parser.add_argument("--gpu", type=int, default=0,
                         help="choose gpu device.")
-    parser.add_argument("--batchsize", type=int, default=1,
+    parser.add_argument("--batchsize", type=int, default=4,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
