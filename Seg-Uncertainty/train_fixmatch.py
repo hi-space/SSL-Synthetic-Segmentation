@@ -19,11 +19,11 @@ from tensorboardX import SummaryWriter
 import logging
 import datetime
 
-from trainer_ms import AD_Trainer
+from trainer_fixmatch import AD_Trainer
 from utils.loss import CrossEntropy2d
 from utils.tool import adjust_learning_rate, adjust_learning_rate_D, Timer 
-from dataset.gta5_dataset import GTA5DataSet
-from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.gta5_aug_dataset import GTA5DataSet
+from dataset.cityscapes_aug_dataset import cityscapesDataSet
 from config import CONSTS
 
 import torchvision
@@ -244,7 +244,6 @@ def main():
         Trainer = AD_Trainer(args)
         Trainer.G = torch.nn.DataParallel( Trainer.G, gpu_ids)
         Trainer.D1 = torch.nn.DataParallel( Trainer.D1, gpu_ids)
-        Trainer.D2 = torch.nn.DataParallel( Trainer.D2, gpu_ids)
     else:
         Trainer = AD_Trainer(args)
 
@@ -268,7 +267,6 @@ def main():
                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                    pin_memory=True, drop_last=True)
 
-
     targetloader_iter = enumerate(targetloader)
 
     # set up tensor board
@@ -285,35 +283,27 @@ def main():
         ax1.axis('off'), ax2.axis('off')
         ax1.set_title('GTA'), ax2.set_title('Cityscapes')
 
-    for i_iter in range(35001, args.num_steps):
+    for i_iter in range(0, args.num_steps):
 
         loss_seg_value1 = 0
         loss_adv_target_value1 = 0
         loss_D_value1 = 0
 
-        loss_seg_value2 = 0
-        loss_adv_target_value2 = 0
-        loss_D_value2 = 0
-
         adjust_learning_rate(Trainer.gen_opt , i_iter, args)
         adjust_learning_rate_D(Trainer.dis1_opt, i_iter, args)
-        adjust_learning_rate_D(Trainer.dis2_opt, i_iter, args)
 
         for sub_i in range(args.iter_size):
-
-            # train G
-
-            # train with source
-
             _, batch = trainloader_iter.__next__()
             _, batch_t = targetloader_iter.__next__()
 
-            images, labels, _, _ = batch
+            images, aug_images, labels, _, _ = batch
             images = images.cuda()
+            aug_images = images.cuda()
             labels = labels.long().cuda()
 
-            images_t, labels_t, _, _ = batch_t
+            images_t, aug_images_t, labels_t, _, _ = batch_t
             images_t = images_t.cuda()
+            aug_images_t = aug_images_t.cuda()
             labels_t = labels_t.long().cuda()
 
             if args.vis_data:
@@ -323,33 +313,24 @@ def main():
                 plt.pause(0.001)
             
             with Timer("Elapsed time in update: %f"):
-                loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss = Trainer.gen_update(images, images_t, labels, labels_t, i_iter)
+                loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss = Trainer.gen_update(images, aug_images, images_t, aug_images_t, labels, labels_t, i_iter)
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
-                loss_seg_value2 += loss_seg2.item() / args.iter_size
                 loss_adv_target_value1 += loss_adv_target1 / args.iter_size
-                loss_adv_target_value2 += loss_adv_target2 / args.iter_size
-                loss_me_value = loss_me
-
-                if args.lambda_adv_target1 > 0 and args.lambda_adv_target2 > 0:
-                    loss_D1, loss_D2 = Trainer.dis_update(pred1, pred2, pred_target1, pred_target2)
+                
+                if args.lambda_adv_target1 > 0:
+                    loss_D1 = Trainer.dis_update(pred1, pred_target1)
                     loss_D_value1 += loss_D1.item()
-                    loss_D_value2 += loss_D2.item()
                 else:
                     loss_D_value1 = 0
                     loss_D_value2 = 0
-
-        del pred1, pred2, pred_target1, pred_target2
+        
+        del pred1, pred_target1
 
         if args.tensorboard:
             scalar_info = {
                 'loss_seg1': loss_seg_value1,
-                'loss_seg2': loss_seg_value2,
                 'loss_adv_target1': loss_adv_target_value1,
-                'loss_adv_target2': loss_adv_target_value2,
-                'loss_me_target': loss_me_value,
-                'loss_kl_target': loss_kl,
                 'loss_D1': loss_D_value1,
-                'loss_D2': loss_D_value2,
                 'val_loss': val_loss,
             }
 
@@ -358,26 +339,23 @@ def main():
                     writer.add_scalar(key, val, i_iter)
 
         logger.info(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_adv1 = %.3f, loss_D1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_adv_target_value1, loss_D_value1, val_loss))
 
         print(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_adv1 = %.3f, loss_D1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_adv_target_value1, loss_D_value1, val_loss))
 
-        # clear loss
-        del loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, val_loss
+        del loss_seg1, loss_adv_target1, val_loss
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
             torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
             torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
-            torch.save(Trainer.D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
             torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
             torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
-            torch.save(Trainer.D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D2.pth'))
 
     if args.tensorboard:
         writer.close()

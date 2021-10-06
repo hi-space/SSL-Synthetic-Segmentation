@@ -3,6 +3,7 @@ from torch.utils import data, model_zoo
 import torch.optim as optim
 import torch.nn.functional as F
 from model.deeplab_multi import DeeplabMulti
+from model.deeplab import Res_Deeplab
 from model.discriminator import FCDiscriminator
 from model.ms_discriminator import MsImageDis
 import torch
@@ -67,7 +68,9 @@ class AD_Trainer(nn.Module):
         self.multi_gpu = args.multi_gpu
         self.only_hard_label = args.only_hard_label
         if args.model == 'DeepLab':
-            self.G = DeeplabMulti(num_classes=args.num_classes, use_se = args.use_se, train_bn = args.train_bn, norm_style = args.norm_style, droprate = args.droprate)
+            # self.G = DeeplabMulti(num_classes=args.num_classes, use_se = args.use_se, train_bn = args.train_bn, norm_style = args.norm_style, droprate = args.droprate)
+            self.G = Res_Deeplab(num_classes=args.num_classes)
+
             if args.restore_from[:4] == 'http' :
                 saved_state_dict = model_zoo.load_url(args.restore_from)
             else:
@@ -132,6 +135,38 @@ class AD_Trainer(nn.Module):
             self.D1, self.dis1_opt = amp.initialize(self.D1, self.dis1_opt, opt_level="O1")
             self.D2, self.dis2_opt = amp.initialize(self.D2, self.dis2_opt, opt_level="O1")
 
+    
+    def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
+                         use_hard_labels=True):
+        assert name in ['ce', 'L2']
+        logits_w = logits_w.detach()
+        if name == 'L2':
+            raise NotImplementedError
+            # assert logits_w.size() == logits_s.size()
+            # return F.mse_loss(logits_s, logits_w, reduction='mean')
+        elif name == 'ce':
+            pseudo_label = torch.softmax(logits_w, dim=-1)
+            max_probs, max_idx = torch.max(pseudo_label, dim=-1)
+            # print('max score is: %3f, mean score is: %3f' % (max(max_probs).item(), max_probs.mean().item()))
+            mask_binary = max_probs.ge(p_cutoff)
+            mask = mask_binary.float()
+
+            if mask.mean().item() == 0:
+                acc_selected = 0
+            else:
+                acc_selected = (target_gt_for_visual[mask_binary] == max_idx[mask_binary]).float().mean().item()
+
+            if use_hard_labels:
+                masked_loss = self.Cri_CE_noreduce(logits_s, max_idx) * mask
+            else:
+                raise NotImplementedError
+                # pseudo_label = torch.softmax(logits_w / T, dim=-1)
+                # masked_loss = ce_loss(logits_s, pseudo_label, use_hard_labels) * mask
+            return masked_loss.mean(), mask.mean(), acc_selected
+
+        else:
+            assert Exception('Not Implemented consistency_loss')
+
     def update_class_criterion(self, labels):
             weight = torch.FloatTensor(self.num_classes).zero_().cuda()
             weight += 1
@@ -165,13 +200,15 @@ class AD_Trainer(nn.Module):
             return labels
 
 
-    def gen_update(self, images, images_t, labels, labels_t, i_iter):
+    def gen_update(self, images, aug_images, images_t, aug_images_t, labels, labels_t, i_iter):
             self.gen_opt.zero_grad()
 
-            pred1, pred2 = self.G(images)
+            # source segmenation loss
+            pred1 = self.G(images)
             pred1 = self.interp(pred1)
-            pred2 = self.interp(pred2)
 
+            pred2 = self.interp(self.G(aug_images))
+            
             if self.class_balance:            
                 self.seg_loss = self.update_class_criterion(labels)
 
@@ -182,21 +219,21 @@ class AD_Trainer(nn.Module):
                 loss_seg2 = self.seg_loss(pred2, labels2)
             else:
                 loss_seg1 = self.seg_loss(pred1, labels)
-                loss_seg2 = self.seg_loss(pred2, labels)
+                loss_seg2 = self.seg_loss(pred2, labels2)
  
-            loss = loss_seg2 + self.lambda_seg * loss_seg1
+            loss = loss_seg1 + self.lambda_seg * loss_seg1
 
-            # target
-            pred_target1, pred_target2 = self.G(images_t)
+            # target segmentation loss
+            pred_target1 = self.G(images_t)
             pred_target1 = self.interp_target(pred_target1)
-            pred_target2 = self.interp_target(pred_target2)
-
+            pred_target2 = self.interp_target(self.G(aug_images_t))
+            
             if self.multi_gpu:
                 loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
+                loss_adv_target2 = self.D1.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
             else:
                 loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
+                loss_adv_target2 = self.D1.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
 
             loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
 
@@ -207,56 +244,38 @@ class AD_Trainer(nn.Module):
                 self.lambda_kl_target_copy = self.lambda_kl_target
                 self.lambda_me_target_copy = self.lambda_me_target
 
-            loss_me = 0.0
-            if self.lambda_me_target_copy>0:
-                confidence_map = torch.sum( self.sm(0.5*pred_target1 + pred_target2)**2, 1).detach()
-                loss_me = -torch.mean( confidence_map * torch.sum( self.sm(0.5*pred_target1 + pred_target2) * self.log_sm(0.5*pred_target1 + pred_target2), 1) )
-                loss += self.lambda_me_target * loss_me
-
             loss_kl = 0.0
             if self.lambda_kl_target_copy>0:
                 n, c, h, w = pred_target1.shape
                 with torch.no_grad():
                     mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
+                    prob_concate_teacher = torch.nn.softmax(mean_pred, dim=1)
                 loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
 
                 loss += self.lambda_kl_target * loss_kl
 
-            if self.fp16:
-                with amp.scale_loss(loss, self.gen_opt) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            loss.backward()
             self.gen_opt.step()
 
-            val_loss = self.seg_loss(pred_target2, labels_t)
+            val_loss = self.seg_loss(pred_target1, labels_t)
 
-            return loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss
+            return loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss
     
-    def dis_update(self, pred1, pred2, pred_target1, pred_target2):
+    def dis_update(self, pred1, pred_target1):
             self.dis1_opt.zero_grad()
-            self.dis2_opt.zero_grad()
 
             pred1 = pred1.detach()
-            pred2 = pred2.detach()
-            
             pred_target1 = pred_target1.detach()
-            pred_target2 = pred_target2.detach()
 
             if self.multi_gpu:
-                loss_D1, reg1 = self.D1.module.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-                loss_D2, reg2 = self.D2.module.calc_dis_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
+                loss_D1, reg1 = self.D1.module.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(pred1, dim=1) )
             else:
-                loss_D1, reg1 = self.D1.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-                loss_D2, reg2 = self.D2.calc_dis_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
+                loss_D1, reg1 = self.D1.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(pred1, dim=1) )
 
-            loss = loss_D1 + loss_D2
-            if self.fp16:
-                with amp.scale_loss(loss, [self.dis1_opt, self.dis2_opt]) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            loss = loss_D1
+            
+            loss.backward()
 
             self.dis1_opt.step()
-            self.dis2_opt.step()
-            return loss_D1, loss_D2
+
+            return loss_D1
