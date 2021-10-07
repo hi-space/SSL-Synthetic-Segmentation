@@ -54,7 +54,7 @@ LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 MAX_VALUE = 2
 NUM_CLASSES = 19
-NUM_STEPS = 250000
+NUM_STEPS = 45000
 NUM_STEPS_STOP = 250000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
@@ -247,8 +247,6 @@ def main():
     else:
         Trainer = AD_Trainer(args)
 
-    print(Trainer)
-
     trainloader = data.DataLoader(
         GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
                     resize_size=args.input_size,
@@ -277,13 +275,13 @@ def main():
 
         writer = SummaryWriter(args.log_dir)
 
-    if True:
+    if args.vis_data:
         fig = plt.figure('dataloader')
         ax1, ax2 = fig.add_subplot(2, 1, 1), fig.add_subplot(2, 1, 2)
         ax1.axis('off'), ax2.axis('off')
         ax1.set_title('GTA'), ax2.set_title('Cityscapes')
 
-    for i_iter in range(0, args.num_steps):
+    for i_iter in range(30001, args.num_steps):
 
         loss_seg_value1 = 0
         loss_adv_target_value1 = 0
@@ -307,7 +305,7 @@ def main():
             with Timer("Elapsed time in update: %f"):
                 loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss, aug_images = Trainer.gen_update(images, images_t, labels, labels_t, i_iter)
 
-                if True:
+                if args.vis_data:
                     ax1.imshow(torchvision.utils.make_grid(aug_images.cpu(), normalize=True).permute(1,2,0))
                     ax2.imshow(torchvision.utils.make_grid(images_t.cpu(), normalize=True).permute(1,2,0))
                     plt.draw()
