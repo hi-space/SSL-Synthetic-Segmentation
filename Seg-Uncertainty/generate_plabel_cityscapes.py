@@ -33,7 +33,7 @@ DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
 
 # train
 DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
-SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'train'
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
 SET = 'train' # We generate pseudo label for training set
 NUM_STEPS = 2975 # Number of images in the training set.
 
@@ -126,10 +126,12 @@ def main():
     batchsize = args.batchsize
 
     model_name = os.path.basename( os.path.dirname(args.restore_from) )
-    #args.save += model_name
+    args.save += model_name
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
+
+    print('save_path: ', args.save)
 
     if args.model == 'DeepLab':
         model = DeeplabMulti(num_classes=args.num_classes, use_se = config['use_se'], train_bn = False, norm_style = config['norm_style'])
@@ -221,7 +223,7 @@ def main():
             dir_name = name[i].split('/')[-2]
             save_path = args.save + '/' + dir_name
             #save_path = re.replace(save_path, 'leftImg8bit', 'pseudo')
-            #print(save_path)
+            print('save path: ', save_path)
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
             output.save('%s/%s' % (save_path, name_tmp))
@@ -240,4 +242,4 @@ def main():
 if __name__ == '__main__':
     with torch.no_grad():
         save_path = main()
-    #os.system('python compute_iou.py ./data/Cityscapes/data/gtFine/train %s'%save_path)
+    os.system('python compute_iou.py /home/yoo/data/cityscapes/gtFine/train %s'%save_path)
