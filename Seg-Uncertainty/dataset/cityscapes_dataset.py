@@ -50,6 +50,7 @@ class cityscapesDataSet(data.Dataset):
         for name in self.img_ids:
             img_file = osp.join(self.root, "leftImg8bit/%s/%s" % (self.set, name))
             label_file = osp.join(self.root, "gtFine/%s/%s" % (self.set, name.replace('leftImg8bit', 'gtFine_labelIds') ))
+
             self.files.append({
                 "img": img_file,
                 "label": label_file,
@@ -60,68 +61,68 @@ class cityscapesDataSet(data.Dataset):
         return len(self.files)
 
     def __getitem__(self, index):
-        if self.set == 'trainextra':
-            datafiles = self.files[index]
-            name = datafiles["name"]
+        # if self.set == 'trainextra':
+        #     datafiles = self.files[index]
+        #     name = datafiles["name"]
 
-            image = Image.open(datafiles["img"]).convert('RGB')
-            # resize
-            image = image.resize(self.resize_size, Image.BICUBIC)
-            if self.autoaug:
-                policy = ImageNetPolicy()
-                image = policy(image)
+        #     image = Image.open(datafiles["img"]).convert('RGB')
+        #     # resize
+        #     image = image.resize(self.resize_size, Image.BICUBIC)
+        #     if self.autoaug:
+        #         policy = ImageNetPolicy()
+        #         image = policy(image)
 
-            if self.randaug:
-                image = RandAugment(image)
+        #     if self.randaug:
+        #         image = RandAugment(image)
 
-            image = np.asarray(image, np.float32)
+        #     image = np.asarray(image, np.float32)
 
-            size = image.shape
-            image = image[:, :, ::-1]  # change to BGR
-            image -= self.mean
-            image = image.transpose((2, 0, 1))
-            x1 = random.randint(0, image.shape[1] - self.h)
-            y1 = random.randint(0, image.shape[2] - self.w)
-            image = image[:, x1:x1+self.h, y1:y1+self.w]
+        #     size = image.shape
+        #     image = image[:, :, ::-1]  # change to BGR
+        #     image -= self.mean
+        #     image = image.transpose((2, 0, 1))
+        #     x1 = random.randint(0, image.shape[1] - self.h)
+        #     y1 = random.randint(0, image.shape[2] - self.w)
+        #     image = image[:, x1:x1+self.h, y1:y1+self.w]
             
-            if self.is_mirror and random.random() < 0.5:
-                image = np.flip(image, axis = 2)
-            #print('Time used: {} sec'.format(time.time()-tt))
-            return image.copy(), image.copy(), np.array(size), name
+        #     if self.is_mirror and random.random() < 0.5:
+        #         image = np.flip(image, axis = 2)
+        #     #print('Time used: {} sec'.format(time.time()-tt))
+        #     return image.copy(), image.copy(), np.array(size), name
 
-        else:
-            #tt = time.time()
-            datafiles = self.files[index]
-            name = datafiles["name"]
+        # else:
+        #tt = time.time()
+        datafiles = self.files[index]
+        name = datafiles["name"]
 
-            image, label = Image.open(datafiles["img"]).convert('RGB'), Image.open(datafiles["label"])
-            # resize
-            image, label = image.resize(self.resize_size, Image.BICUBIC), label.resize(self.resize_size, Image.NEAREST)
-            if self.autoaug:
-                policy = ImageNetPolicy()
-                image = policy(image)
+        image, label = Image.open(datafiles["img"]).convert('RGB'), Image.open(datafiles["label"])
+        # resize
+        image, label = image.resize(self.resize_size, Image.BICUBIC), label.resize(self.resize_size, Image.NEAREST)
+        if self.autoaug:
+            policy = ImageNetPolicy()
+            image = policy(image)
 
-            image, label = np.asarray(image, np.float32), np.asarray(label, np.uint8)
+        image, label = np.asarray(image, np.float32), np.asarray(label, np.uint8)
 
-            # re-assign labels to match the format of Cityscapes
-            label_copy = 255 * np.ones(label.shape, dtype=np.uint8)
-            for k, v in list(self.id_to_trainid.items()):
-                label_copy[label == k] = v
+        # re-assign labels to match the format of Cityscapes
+        label_copy = 255 * np.ones(label.shape, dtype=np.uint8)
+        for k, v in list(self.id_to_trainid.items()):
+            label_copy[label == k] = v
 
-            size = image.shape
-            image = image[:, :, ::-1]  # change to BGR
-            image -= self.mean
-            image = image.transpose((2, 0, 1))
-            x1 = random.randint(0, image.shape[1] - self.h)
-            y1 = random.randint(0, image.shape[2] - self.w)
-            image = image[:, x1:x1+self.h, y1:y1+self.w]
-            label_copy = label_copy[x1:x1+self.h, y1:y1+self.w]
+        size = image.shape
+        image = image[:, :, ::-1]  # change to BGR
+        image -= self.mean
+        image = image.transpose((2, 0, 1))
+        x1 = random.randint(0, image.shape[1] - self.h)
+        y1 = random.randint(0, image.shape[2] - self.w)
+        image = image[:, x1:x1+self.h, y1:y1+self.w]
+        label_copy = label_copy[x1:x1+self.h, y1:y1+self.w]
 
-            if self.is_mirror and random.random() < 0.5:
-                image = np.flip(image, axis = 2)
-                label_copy = np.flip(label_copy, axis = 1)
-            #print('Time used: {} sec'.format(time.time()-tt))
-            return image.copy(), label_copy.copy(), np.array(size), name
+        if self.is_mirror and random.random() < 0.5:
+            image = np.flip(image, axis = 2)
+            label_copy = np.flip(label_copy, axis = 1)
+        #print('Time used: {} sec'.format(time.time()-tt))
+        return image.copy(), label_copy.copy(), np.array(size), name
 
 
 if __name__ == '__main__':
