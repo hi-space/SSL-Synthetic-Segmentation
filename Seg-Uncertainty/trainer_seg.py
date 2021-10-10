@@ -17,6 +17,13 @@ try:
 except ImportError:
     print('This is not an error. If you want to use low precision, i.e., fp16, please install the apex with cuda support (https://github.com/NVIDIA/apex) and update pytorch to 1.0')
 
+import matplotlib
+import matplotlib.pyplot as plt
+import torchvision
+
+matplotlib.use('TkAgg')
+
+
 def weights_init(init_type='gaussian'):
     def init_fun(m):
         classname = m.__class__.__name__
@@ -112,13 +119,21 @@ class AD_Trainer(nn.Module):
 
         self.class_w = torch.FloatTensor(self.num_classes).zero_().cuda() + 1
 
+        import json
+        devkit_dir = 'dataset/cityscapes_list'
+        with open(devkit_dir+'/info.json', 'r') as fp:
+            info = json.load(fp)
+        num_classes = np.int(info['classes'])
+        name_classes = np.array(info['label'], dtype=np.str)
+        self.mapping = np.array(info['label2train'], dtype=np.int)
+
     def update_class_criterion(self, labels):
             weight = torch.FloatTensor(self.num_classes).zero_().cuda()
             weight += 1
             count = torch.FloatTensor(self.num_classes).zero_().cuda()
             often = torch.FloatTensor(self.num_classes).zero_().cuda()
             often += 1
-            # print(labels.shape)
+            
             n, h, w = labels.shape
             for i in range(self.num_classes):
                 count[i] = torch.sum(labels==i)
@@ -145,7 +160,19 @@ class AD_Trainer(nn.Module):
             return labels
 
 
-    def gen_update(self, images, images_t, labels, labels_t, i_iter):
+    def label_mapping(self, input, mapping):
+        output = np.copy(input)
+        for ind in range(len(mapping)):
+            output[input == mapping[ind][0]] = mapping[ind][1]
+        return np.array(output, dtype=np.int64)
+        
+    def gen_update(self, images, images_t, images_v, labels, labels_t, labels_v, i_iter, vis_data=False):
+            if vis_data:    
+                fig = plt.figure('dataloader')
+                ax1, ax2 = fig.add_subplot(2, 1, 1), fig.add_subplot(2, 1, 2)
+                ax1.axis('off'), ax2.axis('off')
+                ax1.set_title('GTA'), ax2.set_title('Cityscapes')
+
             self.gen_opt.zero_grad()
 
             pred1, pred2 = self.G(images)
@@ -173,7 +200,18 @@ class AD_Trainer(nn.Module):
                 loss.backward()
             self.gen_opt.step()
 
-            val_loss = self.seg_loss(pred1, labels)
+            val_pred, _ = self.G(images_v)
+            val_pred = self.interp(val_pred)
+            val_loss = self.seg_loss(val_pred, labels_v)
+
+            pred = torch.argmax(val_pred, 1).squeeze(0).cpu().data.numpy()
+            mask = self.label_mapping(pred, self.mapping)
+
+            if vis_data:
+                ax1.imshow(torchvision.utils.make_grid(images_v.cpu(), normalize=True).permute(1,2,0))
+                ax2.imshow(mask)
+                plt.draw()
+                plt.pause(0.001)
 
             return loss_seg1, loss_seg2, pred1, pred2, val_loss
     
