@@ -28,6 +28,12 @@ from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from config import CONSTS
 
+import torchvision
+import matplotlib
+import matplotlib.pyplot as plt
+
+matplotlib.use('TkAgg')
+
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 AUTOAUG = False
@@ -42,8 +48,9 @@ DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
 DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = '/home/yoo/workspace/SSL-Synthetic-Segmentation/Seg-Uncertainty/pseudo/aagc_640x360_b2_single_cutmix_real'
-DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+DATA_DIRECTORY_TARGET = '/home/yoo/data/cityscapes'
+# DATA_DIRECTORY_TARGET = '/home/yoo/workspace/SSL-Synthetic-Segmentation/Seg-Uncertainty/pseudo/aagc_640x360_b2_single_cutmix_real'
+DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640,360' # 640,360
 LEARNING_RATE = 2.5e-4
@@ -71,7 +78,7 @@ LAMBDA_ME_TARGET = 0
 LAMBDA_KL_TARGET = 0
 
 TARGET = 'cityscapes'
-DATASET = 'trainextra'
+DATASET = 'train'
 NORM_STYLE = 'bn' # or in
 
 
@@ -191,6 +198,7 @@ def get_arguments():
                         help="Path to the directory of log.")
     parser.add_argument("--set", type=str, default=DATASET,
                         help="choose adaptation set.")
+    parser.add_argument("--vis-data", action='store_true', help="visuazlie dataloader")
     return parser.parse_args()
 
 
@@ -204,6 +212,20 @@ if not os.path.exists(args.snapshot_dir):
 with open('%s/opts.yaml'%args.snapshot_dir, 'w') as fp:
     yaml.dump(vars(args), fp, default_flow_style=False)
 
+
+import json
+devkit_dir = 'dataset/cityscapes_list'
+with open(devkit_dir+'/info.json', 'r') as fp:
+    info = json.load(fp)
+num_classes = np.int(info['classes'])
+name_classes = np.array(info['label'], dtype=np.str)
+mapping = np.array(info['label2train'], dtype=np.int)
+
+def label_mapping(input, mapping):
+    output = np.copy(input)
+    for ind in range(len(mapping)):
+        output[input == mapping[ind][0]] = mapping[ind][1]
+    return np.array(output, dtype=np.int64)
 
 def main():
     """Create the model and start the training."""
@@ -263,6 +285,17 @@ def main():
 
     targetloader_iter = enumerate(targetloader)
 
+    # valloader = data.DataLoader(cityscapesDataSet(CONSTS.CITYSCAPES_PATH, CONSTS.CITYSCAPES_VAL_LIST_PATH,
+    #                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
+    #                                                  resize_size=args.input_size_target,
+    #                                                  crop_size=args.crop_size,
+    #                                                  scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+    #                                                  set='val', autoaug = args.autoaug_target),
+    #                                batch_size=1, shuffle=True, num_workers=args.num_workers,
+    #                                pin_memory=True, drop_last=True)
+
+    # valloader_iter = enumerate(valloader)
+
     # set up tensor board
     if args.tensorboard:
         args.log_dir += '/'+ os.path.basename(args.snapshot_dir)
@@ -270,6 +303,13 @@ def main():
             os.makedirs(args.log_dir)
 
         writer = SummaryWriter(args.log_dir)
+
+    if args.vis_data:    
+        fig = plt.figure('dataloader')
+        ax1, ax2 = fig.add_subplot(2, 1, 1), fig.add_subplot(2, 1, 2)
+        ax1.axis('off'), ax2.axis('off')
+        ax1.set_title('GTA'), ax2.set_title('Cityscapes')
+
 
     for i_iter in range(0, args.num_steps):
 
@@ -281,19 +321,30 @@ def main():
         adjust_learning_rate_D(Trainer.dis1_opt, i_iter, args)
 
         for sub_i in range(args.iter_size):
-            _, batch = trainloader_iter.__next__()
+            # _, batch = trainloader_iter.__next__()
             _, batch_t = targetloader_iter.__next__()
+            # _, batch_v = valloader_iter.__next__()
 
-            images, labels, _, _ = batch
-            images = images.cuda()
-            labels = labels.long().cuda()
+            # images, labels, _, _ = batch
+            # images = images.cuda()
+            # labels = labels.long().cuda()
 
             images_t, labels_t, _, _ = batch_t
             images_t = images_t.cuda()
             labels_t = labels_t.long().cuda()
 
+            # images_v, labels_v, _, name = batch_v
+            # images_v = images_v.cuda()
+            # labels_v = labels_v.long().cuda()
+
+            # if args.vis_data:
+            #     ax1.imshow(torchvision.utils.make_grid(images_v.cpu(), normalize=True).permute(1,2,0))
+            #     ax2.imshow(labels_v.cpu().permute(1,2,0))
+            #     plt.draw()
+            #     plt.pause(0.001)
+
             with Timer("Elapsed time in update: %f"):
-                loss_seg1, pred1 = Trainer.gen_update(images_t, labels_t, i_iter)
+                loss_seg1, pred1, val_loss = Trainer.gen_update(images_t, labels_t, i_iter)
                 
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
 
@@ -302,7 +353,7 @@ def main():
         if args.tensorboard:
             scalar_info = {
                 'loss_seg1': loss_seg_value1,
-                'val_loss': loss_seg1,
+                'val_loss': val_loss,
             }
 
             if i_iter % 100 == 0:
