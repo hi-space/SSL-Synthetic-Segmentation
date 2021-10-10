@@ -19,4 +19,4 @@ python train_cutmix_student.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se  
+    --use-se 

@@ -22,8 +22,7 @@
 #    --restore-from ./snapshots/GTA_TO_CITY/GTA5_150000.pth
 
 python train_ms_student.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b1_student  \
-    --restore-from ./snapshots/aagc_640x360_b1/GTA5_best.pth \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_real  \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \

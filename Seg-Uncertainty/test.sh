@@ -1,7 +1,7 @@
 #!/bin/sh
 
 python evaluate_cityscapes.py \
-    --restore-from ./snapshots/aagc_640x360_b1/GTA5_40000.pth
+    --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_student_seg/GTA5_5000.pth
     # --restore-from ./snapshots/aagc_640x360_b1_student/GTA5_20000.pth
     
     
