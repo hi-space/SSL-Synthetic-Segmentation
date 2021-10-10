@@ -33,16 +33,16 @@ IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
 
 # train
-DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
-SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
-SET = 'train' # We generate pseudo label for training set
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
+# SET = 'train' # We generate pseudo label for training set
 NUM_STEPS = 2975 # Number of images in the training set.
 
 # trainextra
-# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
-# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'trainextra'
-# SET = 'trainextra'
-# NUM_STEPS = 19998
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
+SET = 'trainextra'
+NUM_STEPS = 19998
 
 
 if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
@@ -127,7 +127,7 @@ def main():
     batchsize = args.batchsize
 
     model_name = os.path.basename( os.path.dirname(args.restore_from) )
-    args.save += model_name
+    args.save += os.path.join(model_name, args.set)
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
@@ -224,4 +224,4 @@ def main():
 if __name__ == '__main__':
     with torch.no_grad():
         save_path = main()
-    os.system('python compute_plabel_iou.py /home/yoo/data/cityscapes/gtFine/train %s'%save_path)
+    # os.system('python compute_plabel_iou.py /home/yoo/data/cityscapes/gtFine/train %s'%save_path)
