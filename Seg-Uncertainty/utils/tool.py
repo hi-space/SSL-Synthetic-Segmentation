@@ -21,7 +21,6 @@ def adjust_learning_rate(optimizer, i_iter, args):
         lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
         #lr = lr_step(args.learning_rate, i_iter)
     optimizer.param_groups[0]['lr'] = lr
-    print('-------lr_G: %f-------'%lr)
     if len(optimizer.param_groups) > 1:
         optimizer.param_groups[1]['lr'] = lr * 10
 
