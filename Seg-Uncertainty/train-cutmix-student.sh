@@ -1,8 +1,8 @@
 #!/bin/sh
 
-python train_cutmix.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_real_d1000  \
-    --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_real_d1000/GTA5_30000.pth \
+python train_cutmix_student.py  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_student_pseudo  \
+    --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_real/GTA5_40000.pth \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \
@@ -19,4 +19,4 @@ python train_cutmix.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se
+    --use-se 
