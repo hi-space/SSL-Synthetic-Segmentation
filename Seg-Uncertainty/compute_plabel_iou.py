@@ -9,7 +9,6 @@ def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
 
-
 def per_class_iu(hist):
     return np.diag(hist) / (hist.sum(1) + hist.sum(0) - np.diag(hist))
 
@@ -35,15 +34,17 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
 
     image_path_list = join(devkit_dir, 'train.txt')
     label_path_list = join(devkit_dir, 'label_train.txt')
+    
     gt_imgs = open(label_path_list, 'r').read().splitlines()
     gt_imgs = [join(gt_dir, x) for x in gt_imgs]
     pred_imgs = open(image_path_list, 'r').read().splitlines()
-    pred_imgs = [join(pred_dir, x) for x in pred_imgs]
+    pred_imgs = [join(pred_dir, x.replace('leftImg8bit', 'gtFine_labelIds')) for x in pred_imgs]
     
     for ind in range(len(gt_imgs)):
         pred = np.array(Image.open(pred_imgs[ind]))
         label = np.array(Image.open(gt_imgs[ind]))
         label = label_mapping(label, mapping)
+
         if len(label.shape) == 3 and label.shape[2]==4:
             label = label[:,:,0]
         if len(label.flatten()) != len(pred.flatten()):

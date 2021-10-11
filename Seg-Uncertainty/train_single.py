@@ -47,7 +47,7 @@ DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
 DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
-DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640,360' # 640,360
 LEARNING_RATE = 2.5e-4
@@ -75,7 +75,7 @@ LAMBDA_ME_TARGET = 0
 LAMBDA_KL_TARGET = 0
 
 TARGET = 'cityscapes'
-SET = 'train'
+SET = 'trainall'
 NORM_STYLE = 'bn' # or in
 
 
@@ -327,7 +327,7 @@ def main():
                 plt.pause(0.001)
             
             with Timer("Elapsed time in update: %f"):
-                loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss = Trainer.gen_update(images, images_t, images_v, labels, labels_t, labels_v, i_iter)
+                loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss = Trainer.gen_update(images_t, images_t, images_v, labels_t, labels_t, labels_v, i_iter)
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
                 loss_adv_target_value1 += loss_adv_target1 / args.iter_size
                 
@@ -362,14 +362,14 @@ def main():
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
-            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
+            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'CITYS_' + str(args.num_steps_stop) + '.pth'))
+            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'CITYS_' + str(args.num_steps_stop) + '_D1.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
-            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
-            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
+            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'CITYS_' + str(i_iter) + '.pth'))
+            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'CITYS_' + str(i_iter) + '_D1.pth'))
 
     if args.tensorboard:
         writer.close()
