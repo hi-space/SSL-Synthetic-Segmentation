@@ -135,6 +135,14 @@ class AD_Trainer(nn.Module):
             self.D1, self.dis1_opt = amp.initialize(self.D1, self.dis1_opt, opt_level="O1")
             self.D2, self.dis2_opt = amp.initialize(self.D2, self.dis2_opt, opt_level="O1")
 
+        fig = plt.figure('eval')
+        self.ax1, self.ax2, self.ax3 = fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2), fig.add_subplot(1, 3, 3)
+        self.ax4, self.ax5, self.ax6 = fig.add_subplot(2, 3, 4), fig.add_subplot(2, 3, 5), fig.add_subplot(2, 3, 6)
+        self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
+        self.ax4.axis('off'), self.ax5.axis('off'), self.ax6.axis('off')
+        self.ax1.set_title('train input'), self.ax2.set_title('train output'), self.ax3.set_title('train gt')
+        self.ax4.set_title('val input'), self.ax5.set_title('val output'), self.ax6.set_title('val gt')
+
     
     def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
                          use_hard_labels=True):
@@ -237,74 +245,74 @@ class AD_Trainer(nn.Module):
     def gen_update(self, images, images_t, labels, labels_t, i_iter):
             self.gen_opt.zero_grad()
 
-            with torch.autograd.set_detect_anomaly(True):
-                pred1, pred2 = self.G(images)
-                pred1 = self.interp(pred1)
-                pred2 = self.interp(pred2)
+            pred1, pred2 = self.G(images)
+            pred1 = self.interp(pred1)
+            pred2 = self.interp(pred2)
 
-                aug_images, aug_labels = self.patch_images(images, images_t, labels, labels_t)
+            # aug_images, aug_labels = self.patch_images(images, images_t, labels, labels_t)
 
-                pred3, _ = self.G(aug_images)
-                pred3 = self.interp(pred3)
+            # pred3, pred4 = self.G(aug_images)
+            # pred3 = self.interp(pred3)
+            # pred4 = self.interp(pred4)
 
-                if self.class_balance:
-                    self.seg_loss = self.update_class_criterion(labels)
-                
-                if self.only_hard_label > 0:
-                    labels1 = self.update_label(labels.clone(), pred1)
-                    labels2 = self.update_label(labels.clone(), pred2)
-                    labels3 = self.update_label(aug_labels.clone(), pred3)
-                    loss_seg1 = self.seg_loss(pred1, labels1)
-                    loss_seg2 = self.seg_loss(pred2, labels2)
-                    loss_seg3 = self.seg_loss(pred3, labels3)
-                else:
-                    loss_seg1 = self.seg_loss(pred1, labels)
-                    loss_seg2 = self.seg_loss(pred2, labels)
-                    loss_seg3 = self.seg_loss(pred3, aug_labels)
+            if self.class_balance:
+                self.seg_loss = self.update_class_criterion(labels)
+            
+            if self.only_hard_label > 0:
+                labels1 = self.update_label(labels.clone(), pred1)
+                labels2 = self.update_label(labels.clone(), pred2)
+                # labels3 = self.update_label(aug_labels.clone(), pred3)
+                loss_seg1 = self.seg_loss(pred1, labels1)
+                loss_seg2 = self.seg_loss(pred2, labels2)
+                # loss_seg3 = self.seg_loss(pred3, labels3)
+            else:
+                loss_seg1 = self.seg_loss(pred1, labels)
+                loss_seg2 = self.seg_loss(pred2, labels)
+                # loss_seg3 = self.seg_loss(pred3, aug_labels)
 
-                loss = loss_seg2 + self.lambda_seg * loss_seg1 + self.lambda_seg * loss_seg3
+            loss = loss_seg2 + self.lambda_seg * loss_seg1
 
-                pred_target1, pred_target2 = self.G(images_t)
-                pred_target1 = self.interp_target(pred_target1)
-                pred_target2 = self.interp_target(pred_target2)
+            pred_target1, pred_target2 = self.G(images_t)
+            pred_target1 = self.interp_target(pred_target1)
+            pred_target2 = self.interp_target(pred_target2)
 
-                if self.multi_gpu:
-                    loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                    loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-                else:
-                    loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                    loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-        
-                loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
+            if self.multi_gpu:
+                loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
+                loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
+            else:
+                loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
+                loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
+    
+            loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
 
-                if i_iter < 15000:
-                    self.lambda_kl_target_copy = 0
-                    self.lambda_me_target_copy = 0
-                else:
-                    self.lambda_kl_target_copy = self.lambda_kl_target
-                    self.lambda_me_target_copy = self.lambda_me_target
+            if i_iter < 15000:
+                self.lambda_kl_target_copy = 0
+                self.lambda_me_target_copy = 0
+            else:
+                self.lambda_kl_target_copy = self.lambda_kl_target
+                self.lambda_me_target_copy = self.lambda_me_target
 
-                loss_me = 0.0
-                if self.lambda_me_target_copy>0:
-                    confidence_map = torch.sum( self.sm(0.5*pred_target1 + pred_target2)**2, 1).detach()
-                    loss_me = -torch.mean( confidence_map * torch.sum( self.sm(0.5*pred_target1 + pred_target2) * self.log_sm(0.5*pred_target1 + pred_target2), 1) )
-                    loss += self.lambda_me_target * loss_me
+            loss_me = 0.0
+            if self.lambda_me_target_copy>0:
+                confidence_map = torch.sum( self.sm(0.5*pred_target1 + pred_target2)**2, 1).detach()
+                loss_me = -torch.mean( confidence_map * torch.sum( self.sm(0.5*pred_target1 + pred_target2) * self.log_sm(0.5*pred_target1 + pred_target2), 1) )
+                loss += self.lambda_me_target * loss_me
 
-                loss_kl = 0.0
-                if self.lambda_kl_target_copy>0:
-                    n, c, h, w = pred_target1.shape
-                    with torch.no_grad():
-                        mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
-                    loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
+            loss_kl = 0.0
+            if self.lambda_kl_target_copy>0:
+                n, c, h, w = pred_target1.shape
+                with torch.no_grad():
+                    mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
+                loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
 
-                    loss += self.lambda_kl_target * loss_kl
+                loss += self.lambda_kl_target * loss_kl
 
-                loss.backward()
-                self.gen_opt.step()
+            loss.backward()
+            self.gen_opt.step()
 
             val_loss = self.seg_loss(pred_target1, labels_t)
 
-            return loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred3, pred_target1, pred_target2, val_loss
+            return loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss
     
 
     def dis_update(self, pred1, pred2, pred_target1, pred_target2):

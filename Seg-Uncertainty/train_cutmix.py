@@ -47,14 +47,14 @@ DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
 DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
-DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_BASE_LIST_PATH + 'train_100.txt'
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640,360' # 640,360
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 MAX_VALUE = 2
 NUM_CLASSES = 19
-NUM_STEPS = 45000
+NUM_STEPS = 45005
 NUM_STEPS_STOP = 250000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
@@ -311,7 +311,6 @@ def main():
                     plt.draw()
                     plt.pause(0.001)
             
-
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
                 loss_adv_target_value1 += loss_adv_target1 / args.iter_size
                 

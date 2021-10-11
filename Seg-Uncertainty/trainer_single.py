@@ -187,32 +187,22 @@ class AD_Trainer(nn.Module):
             loss = loss_seg1
 
             # target segmentation loss
-            pred_target1 = self.G(images_t)
-            pred_target1 = self.interp_target(pred_target1)
+            # pred_target1 = self.G(images_t)
+            # pred_target1 = self.interp_target(pred_target1)
             
-            if self.multi_gpu:
-                loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-            else:
-                loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
+            # if self.multi_gpu:
+            #     loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
+            # else:
+            #     loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
 
-            loss += self.lambda_adv_target1 * loss_adv_target1
+            # loss += self.lambda_adv_target1 * loss_adv_target1
 
-            if i_iter < 15000:
-                self.lambda_kl_target_copy = 0
-                self.lambda_me_target_copy = 0
-            else:
-                self.lambda_kl_target_copy = self.lambda_kl_target
-                self.lambda_me_target_copy = self.lambda_me_target
-
-            loss_kl = 0.0
-            # if self.lambda_kl_target_copy>0:
-            #     n, c, h, w = pred_target1.shape
-            #     with torch.no_grad():
-            #         mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
-            #         prob_concate_teacher = torch.nn.softmax(mean_pred, dim=1)
-            #     loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
-
-            #     loss += self.lambda_kl_target * loss_kl
+            # if i_iter < 15000:
+            #     self.lambda_kl_target_copy = 0
+            #     self.lambda_me_target_copy = 0
+            # else:
+            #     self.lambda_kl_target_copy = self.lambda_kl_target
+            #     self.lambda_me_target_copy = self.lambda_me_target
 
             loss.backward()
             self.gen_opt.step()

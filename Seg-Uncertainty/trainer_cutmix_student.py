@@ -137,11 +137,11 @@ class AD_Trainer(nn.Module):
 
         fig = plt.figure('eval')
         self.ax1, self.ax2, self.ax3 = fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2), fig.add_subplot(1, 3, 3)
-        # ax4, ax5, ax6 = fig.add_subplot(2, 3, 4), fig.add_subplot(2, 3, 5), fig.add_subplot(2, 3, 6)
+        self.ax4, self.ax5, self.ax6 = fig.add_subplot(2, 3, 4), fig.add_subplot(2, 3, 5), fig.add_subplot(2, 3, 6)
         self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
-        # ax4.axis('off'), ax5.axis('off'), ax6.axis('off')
-        self.ax1.set_title('input'), self.ax2.set_title('output'), self.ax3.set_title('gt')
-        # ax4.set_title('val input'), ax5.set_title('val output'), ax6.set_title('val gt')
+        self.ax4.axis('off'), self.ax5.axis('off'), self.ax6.axis('off')
+        self.ax1.set_title('train input'), self.ax2.set_title('train output'), self.ax3.set_title('train gt')
+        self.ax4.set_title('val input'), self.ax5.set_title('val output'), self.ax6.set_title('val gt')
 
     
     def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
@@ -244,36 +244,14 @@ class AD_Trainer(nn.Module):
         return images1, labels1
 
 
-    def label_mapping(self, input, mapping):
-        output = np.copy(input)
-        for ind in range(len(mapping)):
-            output[input == mapping[ind][0]] = mapping[ind][1]
-        return np.array(output, dtype=np.int64)
-    
-    def get_batchs(self, tensor: Union[torch.Tensor, List[torch.Tensor]]):
-        if isinstance(tensor, list):
-            tensor = torch.stack(tensor, dim=0)
-
-        if tensor.dim() == 2:  # single image H x W
-            tensor = tensor.unsqueeze(0)
-        if tensor.dim() == 3:  # single image
-            if tensor.size(0) == 1:  # if single-channel, convert to 3-channel
-                tensor = torch.cat((tensor, tensor, tensor), 0)
-            tensor = tensor.unsqueeze(0)
-
-        if tensor.dim() == 4 and tensor.size(1) == 1:  # single-channel images
-            tensor = torch.cat((tensor, tensor, tensor), 1)
-
-        return tensor
-
-    def gen_update(self, images_t, labels_t, i_iter, vis_data=True):
+    def gen_update(self, images_t, images_v, labels_t, labels_v, i_iter, vis_data=True):
             
             self.gen_opt.zero_grad()
 
             pred1 = self.G(images_t)
             pred1 = self.interp(pred1)
             
-            # if self.class_balance:            
+            # if self.class_balance: 
             #     self.seg_loss = self.update_class_criterion(labels_t)
 
             # if self.only_hard_label > 0:
@@ -288,15 +266,15 @@ class AD_Trainer(nn.Module):
             loss.backward()
             self.gen_opt.step()
            
-            # val_pred = self.G(images_v)
-            # val_pred = self.interp(val_pred)
-            # val_loss = self.seg_loss(val_pred, labels_v)
+            val_pred = self.G(images_v)
+            val_pred = self.interp(val_pred)
+            val_loss = self.seg_loss(val_pred, labels_v)
 
             labels_t = labels_t.cpu()
             labels_t[labels_t==255] = 0
 
-            # labels_v = labels_v.cpu()
-            # labels_v[labels_v==255] = 0
+            labels_v = labels_v.cpu()
+            labels_v[labels_v==255] = 0
 
             if i_iter % 100 == 0:
                 # ax1.imshow(torchvision.utils.make_grid(images_t.cpu(), normalize=True).permute(1,2,0))
@@ -306,10 +284,14 @@ class AD_Trainer(nn.Module):
                 self.ax1.imshow(torchvision.utils.make_grid(images_t[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
                 self.ax2.imshow(torch.argmax(pred1, 1)[0:1, :, :].cpu().permute(1,2,0))
                 self.ax3.imshow(labels_t[0:1, :, :].permute(1,2,0))
+
+                self.ax4.imshow(torchvision.utils.make_grid(images_v[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
+                self.ax5.imshow(torch.argmax(val_pred, 1)[0:1, :, :].cpu().permute(1,2,0))
+                self.ax6.imshow(labels_v[0:1, :, :].permute(1,2,0))
                 plt.draw()
                 plt.savefig('eval.png')
 
-            return loss, pred1, loss_seg1
+            return loss, pred1, val_loss
     
     def dis_update(self, pred1, pred_target1):
             self.dis1_opt.zero_grad()
