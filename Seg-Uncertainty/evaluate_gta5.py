@@ -175,9 +175,9 @@ def main():
 
 
     if version.parse(torch.__version__) >= version.parse('0.4.0'):
-        interp = nn.Upsample(size=(640, 1280 ), mode='bilinear', align_corners=True)
+        interp = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)
     else:
-        interp = nn.Upsample(size=(640, 1280 ), mode='bilinear')
+        interp = nn.Upsample(size=(1052, 1914), mode='bilinear')
 
     sm = torch.nn.Softmax(dim = 1)
     log_sm = torch.nn.LogSoftmax(dim = 1)
@@ -218,4 +218,4 @@ if __name__ == '__main__':
     tt = time.time()
     with torch.no_grad():
         save_path = main()
-    os.system('python compute_iou.py /home/cgna/Working/LYJ/data/gta/val %s'%save_path)
+    os.system('python compute_iou_gta.py /home/yoo/data/gta/labels %s'%save_path)
