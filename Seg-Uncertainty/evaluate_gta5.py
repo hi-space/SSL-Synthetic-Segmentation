@@ -1,10 +1,11 @@
 import argparse
+from config import CONSTS
 import scipy
 from scipy import ndimage
 import numpy as np
 import sys
 from packaging import version
-
+from multiprocessing import Pool
 import torch
 from torch.autograd import Variable
 import torchvision.models as models
@@ -14,13 +15,18 @@ from model.deeplab import Res_Deeplab
 from model.deeplab_multi import DeeplabMulti
 from model.deeplab_vgg import DeeplabVGG
 from dataset.gta5_dataset import GTA5DataSet
+from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
 from PIL import Image
 from utils.tool import fliplr
 import matplotlib.pyplot as plt
 import torch.nn as nn
+import yaml
+import time
 from config import CONSTS
+
+torch.backends.cudnn.benchmark=True
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -74,7 +80,7 @@ def get_arguments():
                         help="Where restore model parameters from.")
     parser.add_argument("--gpu", type=int, default=0,
                         help="choose gpu device.")
-    parser.add_argument("--batchsize", type=int, default=10,
+    parser.add_argument("--batchsize", type=int, default=4,
                         help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
@@ -83,11 +89,45 @@ def get_arguments():
     return parser.parse_args()
 
 
+def save(output_name):
+    output, name = output_name
+    output_col = colorize_mask(output)
+    output = Image.fromarray(output)
+
+    output.save('%s' % (name))
+    output_col.save('%s_color.png' % (name.split('.jpg')[0]))
+    return
+
+def save_heatmap(output_name):
+    output, name = output_name
+    fig = plt.figure()
+    plt.axis('off')
+    heatmap = plt.imshow(output, cmap='viridis')
+    #fig.colorbar(heatmap)
+    fig.savefig('%s_heatmap.png' % (name.split('.jpg')[0]))
+    return
+
+def save_scoremap(output_name):
+    output, name = output_name
+    fig = plt.figure()
+    plt.axis('off')
+    heatmap = plt.imshow(output, cmap='viridis')
+    #fig.colorbar(heatmap)
+    fig.savefig('%s_scoremap.png' % (name.split('.jpg')[0]))
+    return
+
+
 def main():
     """Create the model and start the evaluation process."""
-
     args = get_arguments()
 
+    config_path = os.path.join(os.path.dirname(args.restore_from),'opts.yaml')
+    with open(config_path, 'r') as stream:
+        config = yaml.load(stream)
+
+    args.model = config['model']
+    print('ModelType:%s'%args.model)
+    print('NormType:%s'%config['norm_style'])
     gpu0 = args.gpu
     batchsize = args.batchsize
 
@@ -97,8 +137,9 @@ def main():
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-    if args.model == 'Deeplab':
-        model = DeeplabMulti(num_classes=args.num_classes, train_bn = False, norm_style = 'in')
+    if args.model == 'DeepLab':
+        print('model from: ', args.restore_from)
+        model = DeeplabMulti(num_classes=args.num_classes, use_se = config['use_se'], train_bn = False, norm_style = config['norm_style'])
     elif args.model == 'Oracle':
         model = Res_Deeplab(num_classes=args.num_classes)
         if args.restore_from == RESTORE_FROM:
@@ -118,11 +159,19 @@ def main():
     except:
         model = torch.nn.DataParallel(model)
         model.load_state_dict(saved_state_dict)
-    model.eval()
-    model.cuda()
 
-    testloader = data.DataLoader(GTA5DataSet(args.data_dir, args.data_list, crop_size=(640, 1280), resize_size=(1280, 640), mean=IMG_MEAN, scale=False, mirror=False),
-                                    batch_size=batchsize, shuffle=False, pin_memory=True)
+    model.eval()
+    model.cuda(gpu0)
+
+    testloader = data.DataLoader(GTA5DataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False),
+                                    batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
+
+    scale = 1.25
+    testloader2 = data.DataLoader(GTA5DataSet(args.data_dir, args.data_list, crop_size=(round(512*scale), round(1024*scale) ), resize_size=( round(1024*scale), round(512*scale)), mean=IMG_MEAN, scale=False, mirror=False),
+                                    batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
+    scale = 0.9
+    testloader3 = data.DataLoader(GTA5DataSet(args.data_dir, args.data_list, crop_size=(round(512*scale), round(1024*scale) ), resize_size=( round(1024*scale), round(512*scale)), mean=IMG_MEAN, scale=False, mirror=False),
+                                    batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
 
 
     if version.parse(torch.__version__) >= version.parse('0.4.0'):
@@ -131,14 +180,17 @@ def main():
         interp = nn.Upsample(size=(640, 1280 ), mode='bilinear')
 
     sm = torch.nn.Softmax(dim = 1)
+    log_sm = torch.nn.LogSoftmax(dim = 1)
+    kl_distance = nn.KLDivLoss( reduction = 'none')
+
     for index, batch in enumerate(testloader):
         if (index*batchsize) % 100 == 0:
             print('%d processd' % (index*batchsize))
         image, _, _, name = batch
-        print(image.shape)
 
         inputs = Variable(image).cuda()
-        if args.model == 'DeeplabMulti':
+
+        if args.model == 'DeepLab':
             output1, output2 = model(inputs)
             output_batch = interp(sm(0.5* output1 + output2)).cpu().data.numpy()
             #output1, output2 = model(fliplr(inputs))
@@ -163,6 +215,7 @@ def main():
     return args.save
 
 if __name__ == '__main__':
+    tt = time.time()
     with torch.no_grad():
         save_path = main()
-    os.system('python compute_iou.py ./data/GTA5/data/gtFine/val %s'%save_path)
+    os.system('python compute_iou.py /home/cgna/Working/LYJ/data/gta/val %s'%save_path)
