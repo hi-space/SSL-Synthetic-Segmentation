@@ -1,11 +1,11 @@
 #!/bin/sh
 
 python train_cutmix_student.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_student  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_student_pseudo  \
     --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_real/GTA5_40000.pth \
     --drop 0.1  \
     --warm-up 5000  \
-    --batch-size 4  \
+    --batch-size 2  \
     --learning-rate 2e-4  \
     --crop-size 640,360  \
     --lambda-seg 0.5   \

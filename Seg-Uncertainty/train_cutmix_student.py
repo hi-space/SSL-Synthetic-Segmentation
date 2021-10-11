@@ -48,8 +48,8 @@ DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
 DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = '/home/yoo/data/cityscapes'
-# DATA_DIRECTORY_TARGET = '/home/yoo/workspace/SSL-Synthetic-Segmentation/Seg-Uncertainty/pseudo/aagc_640x360_b2_single_cutmix_real'
+# DATA_DIRECTORY_TARGET = '/home/yoo/data/cityscapes'
+DATA_DIRECTORY_TARGET = '/home/yoo/workspace/SSL-Synthetic-Segmentation/Seg-Uncertainty/pseudo/aagc_640x360_b2_single_cutmix_real'
 DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640,360' # 640,360
@@ -285,16 +285,16 @@ def main():
 
     targetloader_iter = enumerate(targetloader)
 
-    # valloader = data.DataLoader(cityscapesDataSet(CONSTS.CITYSCAPES_PATH, CONSTS.CITYSCAPES_VAL_LIST_PATH,
-    #                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
-    #                                                  resize_size=args.input_size_target,
-    #                                                  crop_size=args.crop_size,
-    #                                                  scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-    #                                                  set='val', autoaug = args.autoaug_target),
-    #                                batch_size=1, shuffle=True, num_workers=args.num_workers,
-    #                                pin_memory=True, drop_last=True)
+    valloader = data.DataLoader(cityscapesDataSet(CONSTS.CITYSCAPES_PATH, CONSTS.CITYSCAPES_VAL_LIST_PATH,
+                                                     max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                     resize_size=args.input_size_target,
+                                                     crop_size=args.crop_size,
+                                                     scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                     set='val', autoaug = args.autoaug_target),
+                                   batch_size=1, shuffle=True, num_workers=args.num_workers,
+                                   pin_memory=True, drop_last=True)
 
-    # valloader_iter = enumerate(valloader)
+    valloader_iter = enumerate(valloader)
 
     # set up tensor board
     if args.tensorboard:
@@ -323,7 +323,7 @@ def main():
         for sub_i in range(args.iter_size):
             # _, batch = trainloader_iter.__next__()
             _, batch_t = targetloader_iter.__next__()
-            # _, batch_v = valloader_iter.__next__()
+            _, batch_v = valloader_iter.__next__()
 
             # images, labels, _, _ = batch
             # images = images.cuda()
@@ -333,9 +333,9 @@ def main():
             images_t = images_t.cuda()
             labels_t = labels_t.long().cuda()
 
-            # images_v, labels_v, _, name = batch_v
-            # images_v = images_v.cuda()
-            # labels_v = labels_v.long().cuda()
+            images_v, labels_v, _, name = batch_v
+            images_v = images_v.cuda()
+            labels_v = labels_v.long().cuda()
 
             # if args.vis_data:
             #     ax1.imshow(torchvision.utils.make_grid(images_v.cpu(), normalize=True).permute(1,2,0))
@@ -344,7 +344,7 @@ def main():
             #     plt.pause(0.001)
 
             with Timer("Elapsed time in update: %f"):
-                loss_seg1, pred1, val_loss = Trainer.gen_update(images_t, labels_t, i_iter)
+                loss_seg1, pred1, val_loss = Trainer.gen_update(images_t, images_v, labels_t, labels_v, i_iter)
                 
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
 
@@ -361,10 +361,10 @@ def main():
                     writer.add_scalar(key, val, i_iter)
 
         logger.info(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg1))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, val_loss))
 
         print(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg1))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, val_loss))
 
         del loss_seg1
 

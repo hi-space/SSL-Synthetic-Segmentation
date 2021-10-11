@@ -14,9 +14,6 @@ import numpy as np
 import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
-import cv2
-
-matplotlib.use('TkAgg')
 
 def weights_init(init_type='gaussian'):
     def init_fun(m):
@@ -257,7 +254,7 @@ class AD_Trainer(nn.Module):
                 loss_seg1 = self.seg_loss(pred1, labels)
                 loss_seg2 = self.seg_loss(pred2, labels2)
  
-            loss = loss_seg1 + self.lambda_seg * loss_seg1
+            loss = loss_seg1 + self.lambda_seg * loss_seg2
 
             # target segmentation loss
             # aug_images_t, aug_labels_t = self.patch_images(images_t, images, labels_t, labels)

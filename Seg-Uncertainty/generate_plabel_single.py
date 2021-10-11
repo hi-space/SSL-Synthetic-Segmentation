@@ -33,16 +33,16 @@ IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
 
 # train
-# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
-# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
-# SET = 'train' # We generate pseudo label for training set
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
+SET = 'train' # We generate pseudo label for training set
 NUM_STEPS = 2975 # Number of images in the training set.
 
 # trainextra
-DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
-SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
-SET = 'trainextra'
-NUM_STEPS = 19998
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
+# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
+# SET = 'trainextra'
+# NUM_STEPS = 19998
 
 
 if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
@@ -197,12 +197,11 @@ def main():
             output_batch = model(Variable(image).cuda())
             output_batch = interp(output_batch).cpu().data.numpy()
 
-        #output_batch = output_batch.transpose(0,2,3,1)
-        #output_batch = np.asarray(np.argmax(output_batch, axis=3), dtype=np.uint8)
         output_batch = output_batch.transpose(0,2,3,1)
         score_batch = np.max(output_batch, axis=3)
+
         output_batch = np.asarray(np.argmax(output_batch, axis=3), dtype=np.uint8)
-        #output_batch[score_batch<3.2] = 255  #3.2 = 4*0.8
+        output_batch[score_batch<0.5] = 255  #3.2 = 4*0.8
         for i in range(output_batch.shape[0]):
             output = output_batch[i,:,:]
             output_col = colorize_mask(output)
@@ -215,7 +214,7 @@ def main():
             print('save path: ', save_path)
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
-            output.save('%s/%s' % (save_path, name_tmp))
+            output.save('%s/%s' % (save_path, name_tmp.replace('leftImg8bit.png', 'gtFine_labelIds.png')))
             print('%s/%s' % (save_path, name_tmp))
             output_col.save('%s/%s_color.png' % (save_path, name_tmp.split('.')[0]))
             
@@ -224,4 +223,4 @@ def main():
 if __name__ == '__main__':
     with torch.no_grad():
         save_path = main()
-    # os.system('python compute_plabel_iou.py /home/yoo/data/cityscapes/gtFine/train %s'%save_path)
+    os.system('python compute_plabel_iou.py /home/yoo/data/cityscapes/gtFine/train %s'%save_path)
