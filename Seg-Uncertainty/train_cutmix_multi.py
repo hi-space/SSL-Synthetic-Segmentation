@@ -30,8 +30,6 @@ import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
 
-matplotlib.use('TkAgg')
-
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 AUTOAUG = False
@@ -54,7 +52,7 @@ LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 MAX_VALUE = 2
 NUM_CLASSES = 19
-NUM_STEPS = 45000
+NUM_STEPS = 250000
 NUM_STEPS_STOP = 250000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234

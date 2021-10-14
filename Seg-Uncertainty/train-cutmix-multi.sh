@@ -1,7 +1,7 @@
 #!/bin/sh
 
 python train_cutmix_multi.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_multi_cutmix_seg2_0.5  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_multi_cutmix  \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \
@@ -18,4 +18,4 @@ python train_cutmix_multi.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se
+    --use-se 

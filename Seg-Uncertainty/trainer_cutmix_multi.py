@@ -1,344 +1,370 @@
+import argparse
+import torch
 import torch.nn as nn
 from torch.utils import data, model_zoo
-import torch.optim as optim
-import torch.nn.functional as F
-from model.deeplab_multi import DeeplabMulti
-from model.deeplab import Res_Deeplab
-from model.discriminator import FCDiscriminator
-from model.ms_discriminator import MsImageDis
-import torch
-import torch.nn.init as init
-import copy
 import numpy as np
+import pickle
+from torch.autograd import Variable
+import torch.optim as optim
+import scipy.misc
+import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
+import sys
+import os
+import os.path as osp
+import random
+import time
+import yaml
+from tensorboardX import SummaryWriter
+import logging
+import datetime
+
+from trainer_cutmix_multi import AD_Trainer
+from utils.loss import CrossEntropy2d
+from utils.tool import adjust_learning_rate, adjust_learning_rate_D, Timer 
+from dataset.gta5_dataset import GTA5DataSet
+from dataset.cityscapes_dataset import cityscapesDataSet
+from config import CONSTS
 
 import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
-import cv2
 
-matplotlib.use('TkAgg')
+IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
-def weights_init(init_type='gaussian'):
-    def init_fun(m):
-        classname = m.__class__.__name__
-        if (classname.find('Conv') == 0 or classname.find('Linear') == 0) and hasattr(m, 'weight'):
-            # print m.__class__.__name__
-            if init_type == 'gaussian':
-                init.normal_(m.weight.data, 0.0, 0.02)
-            elif init_type == 'xavier':
-                init.xavier_normal_(m.weight.data, gain=math.sqrt(2))
-            elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-            elif init_type == 'orthogonal':
-                init.orthogonal_(m.weight.data, gain=math.sqrt(2))
-            elif init_type == 'default':
-                pass
-            else:
-                assert 0, "Unsupported initialization: {}".format(init_type)
-            if hasattr(m, 'bias') and m.bias is not None:
-                init.constant_(m.bias.data, 0.0)
+AUTOAUG = False
+AUTOAUG_TARGET = False
 
-    return init_fun
+MODEL = 'DeepLab'
+BATCH_SIZE = 16
+ITER_SIZE = 1
+NUM_WORKERS = 2
+DATA_DIRECTORY = CONSTS.GTA_PATH
+DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
+DROPRATE = 0.1
+IGNORE_LABEL = 255
+INPUT_SIZE = '1280,720'
+DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
+DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+INPUT_SIZE_TARGET = '1024,512'
+CROP_SIZE = '640,360' # 640,360
+LEARNING_RATE = 2.5e-4
+MOMENTUM = 0.9
+MAX_VALUE = 2
+NUM_CLASSES = 19
+NUM_STEPS = 250000
+NUM_STEPS_STOP = 250000  # early stopping
+POWER = 0.9
+RANDOM_SEED = 1234
+RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+SAVE_NUM_IMAGES = 2
+SAVE_PRED_EVERY = 5000
+SNAPSHOT_DIR = './snapshots/'
+WEIGHT_DECAY = 0.0005
+WARM_UP = 0 # no warmup
+LOG_DIR = './log'
 
-def train_bn(m):
-    classname = m.__class__.__name__
-    if classname.find('BatchNorm') != -1:
-        m.train()
+LEARNING_RATE_D = 1e-4
+LAMBDA_SEG = 0.1
+LAMBDA_ADV_TARGET1 = 0.0002
+LAMBDA_ADV_TARGET2 = 0.001
 
-def inplace_relu(m):
-    classname = m.__class__.__name__
-    if classname.find('ReLU') != -1:
-        m.inplace=True
+LAMBDA_ME_TARGET = 0
+LAMBDA_KL_TARGET = 0
 
-def fliplr(img):
-    '''flip horizontal'''
-    inv_idx = torch.arange(img.size(3)-1,-1,-1).long().cuda()  # N x C x H x W
-    img_flip = img.index_select(3,inv_idx)
-    return img_flip
+TARGET = 'cityscapes'
+SET = 'train'
+NORM_STYLE = 'bn' # or in
 
-class AD_Trainer(nn.Module):
-    def __init__(self, args):
-        super(AD_Trainer, self).__init__()
-        self.fp16 = args.fp16
-        self.class_balance = args.class_balance
-        self.often_balance = args.often_balance
-        self.num_classes = args.num_classes
-        self.class_weight = torch.FloatTensor(self.num_classes).zero_().cuda() + 1
-        self.often_weight = torch.FloatTensor(self.num_classes).zero_().cuda() + 1
-        self.multi_gpu = args.multi_gpu
-        self.only_hard_label = args.only_hard_label
-        if args.model == 'DeepLab':
-            self.G = DeeplabMulti(num_classes=args.num_classes, use_se = args.use_se, train_bn = args.train_bn, norm_style = args.norm_style, droprate = args.droprate)
-            # self.G = Res_Deeplab(num_classes=args.num_classes)
 
-            if args.restore_from[:4] == 'http' :
-                saved_state_dict = model_zoo.load_url(args.restore_from)
-            else:
-                saved_state_dict = torch.load(args.restore_from)
-                print("restore from: %s" % (args.restore_from))
+def get_logger(logdir):
+    print('log dir: ', logdir)
+    logger = logging.getLogger('ptsemseg')
+    ts = str(datetime.datetime.now()).split('.')[0].replace(" ", "_")
+    ts = ts.replace(":", "_").replace("-","_")
+    file_path = os.path.join(logdir, 'run_{}.log'.format(ts))
+    hdlr = logging.FileHandler(file_path)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr) 
+    logger.setLevel(logging.INFO)
+    return logger
 
-            new_params = self.G.state_dict().copy()
-            for i in saved_state_dict:
-                # Scale.layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                # print i_parts
-                if args.restore_from[:4] == 'http' :
-                    if i_parts[1] !='fc' and i_parts[1] !='layer5':
-                        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                        print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
+def get_arguments():
+    """Parse all the arguments provided from the CLI.
+
+    Returns:
+      A list of parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
+    parser.add_argument("--autoaug", action='store_true', help="use augmentation or not" )
+    parser.add_argument("--autoaug_target", action='store_true', help="use augmentation or not" )
+    parser.add_argument("--model", type=str, default=MODEL,
+                        help="available options : DeepLab")
+    parser.add_argument("--target", type=str, default=TARGET,
+                        help="available options : cityscapes")
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
+                        help="Number of images sent to the network in one step.")
+    parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
+                        help="Accumulate gradients for ITER_SIZE iterations.")
+    parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
+                        help="number of workers for multithread dataloading.")
+    parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
+                        help="Path to the directory containing the source dataset.")
+    parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
+                        help="Path to the file listing the images in the source dataset.")
+    parser.add_argument("--droprate", type=float, default=DROPRATE,
+                        help="DropRate.")
+    parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
+                        help="The index of the label to ignore during the training.")
+    parser.add_argument("--input-size", type=str, default=INPUT_SIZE,
+                        help="Comma-separated string with height and width of source images.")
+    parser.add_argument("--crop-size", type=str, default=CROP_SIZE,
+                        help="Comma-separated string with height and width of source images.")
+    parser.add_argument("--data-dir-target", type=str, default=DATA_DIRECTORY_TARGET,
+                        help="Path to the directory containing the target dataset.")
+    parser.add_argument("--data-list-target", type=str, default=DATA_LIST_PATH_TARGET,
+                        help="Path to the file listing the images in the target dataset.")
+    parser.add_argument("--input-size-target", type=str, default=INPUT_SIZE_TARGET,
+                        help="Comma-separated string with height and width of target images.")
+    parser.add_argument("--is-training", action="store_true",
+                        help="Whether to updates the running means and variances during the training.")
+    parser.add_argument("--learning-rate", type=float, default=LEARNING_RATE,
+                        help="Base learning rate for training with polynomial decay.")
+    parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
+                        help="Base learning rate for discriminator.")
+    parser.add_argument("--lambda-seg", type=float, default=LAMBDA_SEG,
+                        help="lambda_seg.")
+    parser.add_argument("--lambda-adv-target1", type=float, default=LAMBDA_ADV_TARGET1,
+                        help="lambda_adv for adversarial training.")
+    parser.add_argument("--lambda-adv-target2", type=float, default=LAMBDA_ADV_TARGET2,
+                        help="lambda_adv for adversarial training.")
+    parser.add_argument("--lambda-me-target", type=float, default=LAMBDA_ME_TARGET,
+                        help="lambda_me for minimize cross entropy loss on target.")
+    parser.add_argument("--lambda-kl-target", type=float, default=LAMBDA_KL_TARGET,
+                        help="lambda_me for minimize kl loss on target.")
+    parser.add_argument("--momentum", type=float, default=MOMENTUM,
+                        help="Momentum component of the optimiser.")
+    parser.add_argument("--max-value", type=float, default=MAX_VALUE,
+                        help="Max Value of Class Weight.")
+    parser.add_argument("--norm-style", type=str, default=NORM_STYLE,
+                        help="Norm Style in the final classifier.")
+    parser.add_argument("--not-restore-last", action="store_true",
+                        help="Whether to not restore last (FC) layers.")
+    parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
+                        help="Number of classes to predict (including background).")
+    parser.add_argument("--num-steps", type=int, default=NUM_STEPS,
+                        help="Number of training steps.")
+    parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
+                        help="Number of training steps for early stopping.")
+    parser.add_argument("--power", type=float, default=POWER,
+                        help="Decay parameter to compute the learning rate.")
+    parser.add_argument("--random-mirror", action="store_true",
+                        help="Whether to randomly mirror the inputs during the training.")
+    parser.add_argument("--random-scale", action="store_true",
+                        help="Whether to randomly scale the inputs during the training.")
+    parser.add_argument("--fp16", action="store_true",
+                        help="Use FP16.")
+    parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
+                        help="Random seed to have reproducible results.")
+    parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
+                        help="Where restore model parameters from.")
+    parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
+                        help="How many images to save.")
+    parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
+                        help="Save summaries and checkpoint every often.")
+    parser.add_argument("--snapshot-dir", type=str, default=SNAPSHOT_DIR,
+                        help="Where to save snapshots of the model.")
+    parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
+                        help="Regularisation parameter for L2-loss.")
+    parser.add_argument("--warm-up", type=float, default=WARM_UP, help = 'warm up iteration')
+    parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
+    parser.add_argument("--class-balance", action='store_true', help="class balance.")
+    parser.add_argument("--use-se", action='store_true', help="use se block.")
+    parser.add_argument("--only-hard-label",type=float, default=0,  
+                         help="class balance.")
+    parser.add_argument("--train_bn", action='store_true', help="train batch normalization.")
+    parser.add_argument("--sync_bn", action='store_true', help="sync batch normalization.")
+    parser.add_argument("--often-balance", action='store_true', help="balance the apperance times.")
+    parser.add_argument("--gpu-ids", type=str, default='0,1', help = 'choose gpus')
+    parser.add_argument("--tensorboard", action='store_false', help="choose whether to use tensorboard.")
+    parser.add_argument("--log-dir", type=str, default=LOG_DIR,
+                        help="Path to the directory of log.")
+    parser.add_argument("--set", type=str, default=SET,
+                        help="choose adaptation set.")
+    parser.add_argument("--vis-data", action='store_true', help="visuazlie dataloader")
+    return parser.parse_args()
+
+
+args = get_arguments()
+logger = get_logger(args.log_dir)
+
+# save opts
+if not os.path.exists(args.snapshot_dir):
+    os.makedirs(args.snapshot_dir)
+
+with open('%s/opts.yaml'%args.snapshot_dir, 'w') as fp:
+    yaml.dump(vars(args), fp, default_flow_style=False)
+
+
+def main():
+    """Create the model and start the training."""
+
+    w, h = map(int, args.input_size.split(','))
+    args.input_size = (w, h)
+
+    w, h = map(int, args.crop_size.split(','))
+    args.crop_size = (h, w)
+
+    w, h = map(int, args.input_size_target.split(','))
+    args.input_size_target = (w, h)
+
+    cudnn.enabled = True
+    cudnn.benchmark = True
+
+    str_ids = args.gpu_ids.split(',')
+    gpu_ids = []
+    for str_id in str_ids:
+        gid = int(str_id)
+        if gid >=0:
+            gpu_ids.append(gid)
+
+    num_gpu = len(gpu_ids)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '1,0'
+
+    print('num_gpu: ', num_gpu)
+    print('gpu_ids: ', gpu_ids)
+
+    args.multi_gpu = False
+    if num_gpu>1:
+        args.multi_gpu = True
+        Trainer = AD_Trainer(args)
+        Trainer.G = torch.nn.DataParallel( Trainer.G, gpu_ids)
+        Trainer.D1 = torch.nn.DataParallel( Trainer.D1, gpu_ids)
+        Trainer.D2 = torch.nn.DataParallel( Trainer.D2, gpu_ids)
+    else:
+        Trainer = AD_Trainer(args)
+
+    trainloader = data.DataLoader(
+        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
+                    resize_size=args.input_size,
+                    crop_size=args.crop_size,
+                    scale=True, mirror=True, mean=IMG_MEAN, autoaug = args.autoaug),
+        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+
+    trainloader_iter = enumerate(trainloader)
+
+    targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                     max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                     resize_size=args.input_size_target,
+                                                     crop_size=args.crop_size,
+                                                     scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                     set=args.set, autoaug = args.autoaug_target),
+                                   batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                   pin_memory=True, drop_last=True)
+
+    targetloader_iter = enumerate(targetloader)
+
+    # set up tensor board
+    if args.tensorboard:
+        args.log_dir += '/'+ os.path.basename(args.snapshot_dir)
+        if not os.path.exists(args.log_dir):
+            os.makedirs(args.log_dir)
+
+        writer = SummaryWriter(args.log_dir)
+
+    if args.vis_data:
+        fig = plt.figure('dataloader')
+        ax1, ax2 = fig.add_subplot(2, 1, 1), fig.add_subplot(2, 1, 2)
+        ax1.axis('off'), ax2.axis('off')
+        ax1.set_title('GTA'), ax2.set_title('Cityscapes')
+
+    for i_iter in range(0, args.num_steps):
+
+        loss_seg_value1 = 0
+        loss_adv_target_value1 = 0
+        loss_D_value1 = 0
+
+        loss_seg_value2 = 0
+        loss_adv_target_value2 = 0
+        loss_D_value2 = 0
+
+        adjust_learning_rate(Trainer.gen_opt , i_iter, args)
+        adjust_learning_rate_D(Trainer.dis1_opt, i_iter, args)
+        adjust_learning_rate_D(Trainer.dis2_opt, i_iter, args)
+
+        for sub_i in range(args.iter_size):
+            _, batch = trainloader_iter.__next__()
+            _, batch_t = targetloader_iter.__next__()
+
+            images, labels, _, _ = batch
+            images = images.cuda()
+            labels = labels.long().cuda()
+
+            images_t, labels_t, _, _ = batch_t
+            images_t = images_t.cuda()
+            labels_t = labels_t.long().cuda()
+            
+            with Timer("Elapsed time in update: %f"):
+                loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss = Trainer.gen_update(images, images_t, labels, labels_t, i_iter)
+            
+                loss_seg_value1 += loss_seg1.item() / args.iter_size
+                loss_seg_value2 += loss_seg2.item() / args.iter_size
+                loss_adv_target_value1 += loss_adv_target1 / args.iter_size
+                loss_adv_target_value2 += loss_adv_target2 / args.iter_size
+                loss_me_value = loss_me
+                
+                if args.lambda_adv_target1 > 0 and args.lambda_adv_target2 > 0:
+                    loss_D1, loss_D2 = Trainer.dis_update(pred1, pred2, pred_target1, pred_target2)
+                    loss_D_value1 += loss_D1.item()
+                    loss_D_value2 += loss_D2.item()
                 else:
-                    #new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                    if i_parts[0] =='module':
-                        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                        print('%s is loaded from pre-trained weight.\n'%i_parts[1:])
-                    else:
-                        new_params['.'.join(i_parts[0:])] = saved_state_dict[i]
-                        print('%s is loaded from pre-trained weight.\n'%i_parts[0:])
-        self.G.load_state_dict(new_params)
+                    loss_D_value1 = 0
+                    loss_D_value2 = 0
+        
+        del pred1, pred2, pred_target1, pred_target2
 
-        self.D1 = MsImageDis(input_dim = args.num_classes).cuda() 
-        self.D2 = MsImageDis(input_dim = args.num_classes).cuda() 
-        self.D1.apply(weights_init('gaussian'))
-        self.D2.apply(weights_init('gaussian'))
+        if args.tensorboard:
+            scalar_info = {
+                'loss_seg1': loss_seg_value1,
+                'loss_seg2': loss_seg_value2,
+                'loss_adv_target1': loss_adv_target_value1,
+                'loss_adv_target2': loss_adv_target_value2,
+                'loss_me_target': loss_me_value,
+                'loss_kl_target': loss_kl,
+                'loss_D1': loss_D_value1,
+                'loss_D2': loss_D_value2,
+                'val_loss': val_loss,
+            }
 
-        if self.multi_gpu and args.sync_bn:
-            print("using apex synced BN")
-            self.G = apex.parallel.convert_syncbn_model(self.G)
+            if i_iter % 100 == 0:
+                for key, val in scalar_info.items():
+                    writer.add_scalar(key, val, i_iter)
 
-        self.gen_opt = optim.SGD(self.G.optim_parameters(args),
-                          lr=args.learning_rate, momentum=args.momentum, nesterov=True, weight_decay=args.weight_decay)
+        logger.info(
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
 
-        self.dis1_opt = optim.Adam(self.D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        print(
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
 
-        self.dis2_opt = optim.Adam(self.D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        del loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, val_loss
 
-        self.seg_loss = nn.CrossEntropyLoss(ignore_index=255)
-        self.kl_loss = nn.KLDivLoss(size_average=False)
-        self.sm = torch.nn.Softmax(dim = 1)
-        self.log_sm = torch.nn.LogSoftmax(dim = 1)
-        self.G = self.G.cuda()
-        self.D1 = self.D1.cuda()
-        self.D2 = self.D2.cuda()
-        self.interp = nn.Upsample(size= args.crop_size, mode='bilinear', align_corners=True)
-        self.interp_target = nn.Upsample(size= args.crop_size, mode='bilinear', align_corners=True)
-        self.lambda_seg = args.lambda_seg
-        self.max_value = args.max_value
-        self.lambda_me_target = args.lambda_me_target
-        self.lambda_kl_target = args.lambda_kl_target
-        self.lambda_adv_target1 = args.lambda_adv_target1
-        self.lambda_adv_target2 = args.lambda_adv_target2
-        self.class_w = torch.FloatTensor(self.num_classes).zero_().cuda() + 1
-        if args.fp16:
-            # Name the FP16_Optimizer instance to replace the existing optimizer
-            assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
-            self.G, self.gen_opt = amp.initialize(self.G, self.gen_opt, opt_level="O1")
-            self.D1, self.dis1_opt = amp.initialize(self.D1, self.dis1_opt, opt_level="O1")
-            self.D2, self.dis2_opt = amp.initialize(self.D2, self.dis2_opt, opt_level="O1")
+        if i_iter >= args.num_steps_stop - 1:
+            print('save model ...')
+            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
+            torch.save(Trainer.D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
+            break
 
-        fig = plt.figure('eval')
-        self.ax1, self.ax2, self.ax3 = fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2), fig.add_subplot(1, 3, 3)
-        self.ax4, self.ax5, self.ax6 = fig.add_subplot(2, 3, 4), fig.add_subplot(2, 3, 5), fig.add_subplot(2, 3, 6)
-        self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
-        self.ax4.axis('off'), self.ax5.axis('off'), self.ax6.axis('off')
-        self.ax1.set_title('train input'), self.ax2.set_title('train output'), self.ax3.set_title('train gt')
-        self.ax4.set_title('val input'), self.ax5.set_title('val output'), self.ax6.set_title('val gt')
+        if i_iter % args.save_pred_every == 0 and i_iter != 0:
+            print('taking snapshot ...')
+            torch.save(Trainer.G.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
+            torch.save(Trainer.D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
+            torch.save(Trainer.D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D2.pth'))
 
-    
-    def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
-                         use_hard_labels=True):
-        assert name in ['ce', 'L2']
-        logits_w = logits_w.detach()
-        if name == 'L2':
-            raise NotImplementedError
-            # assert logits_w.size() == logits_s.size()
-            # return F.mse_loss(logits_s, logits_w, reduction='mean')
-        elif name == 'ce':
-            pseudo_label = torch.softmax(logits_w, dim=-1)
-            max_probs, max_idx = torch.max(pseudo_label, dim=-1)
-            # print('max score is: %3f, mean score is: %3f' % (max(max_probs).item(), max_probs.mean().item()))
-            mask_binary = max_probs.ge(p_cutoff)
-            mask = mask_binary.float()
+    if args.tensorboard:
+        writer.close()
 
-            if mask.mean().item() == 0:
-                acc_selected = 0
-            else:
-                acc_selected = (target_gt_for_visual[mask_binary] == max_idx[mask_binary]).float().mean().item()
 
-            if use_hard_labels:
-                masked_loss = self.Cri_CE_noreduce(logits_s, max_idx) * mask
-            else:
-                raise NotImplementedError
-                # pseudo_label = torch.softmax(logits_w / T, dim=-1)
-                # masked_loss = ce_loss(logits_s, pseudo_label, use_hard_labels) * mask
-            return masked_loss.mean(), mask.mean(), acc_selected
-
-        else:
-            assert Exception('Not Implemented consistency_loss')
-
-    def update_class_criterion(self, labels):
-            weight = torch.FloatTensor(self.num_classes).zero_().cuda()
-            weight += 1
-            count = torch.FloatTensor(self.num_classes).zero_().cuda()
-            often = torch.FloatTensor(self.num_classes).zero_().cuda()
-            often += 1
-            # print(labels.shape)
-            n, h, w = labels.shape
-            for i in range(self.num_classes):
-                count[i] = torch.sum(labels==i)
-                if count[i] < 64*64*n: #small objective
-                    weight[i] = self.max_value
-            if self.often_balance:
-                often[count == 0] = self.max_value
-
-            self.often_weight = 0.9 * self.often_weight + 0.1 * often 
-            self.class_weight = weight * self.often_weight
-            # print(self.class_weight)
-            return nn.CrossEntropyLoss(weight = self.class_weight, ignore_index=255)
-
-    def update_label(self, labels, prediction):
-            criterion = nn.CrossEntropyLoss(weight = self.class_weight, ignore_index=255, reduction = 'none')
-            #criterion = self.seg_loss
-            loss = criterion(prediction, labels)
-            # print('original loss: %f'% self.seg_loss(prediction, labels) )
-            #mm = torch.median(loss)
-            loss_data = loss.data.cpu().numpy()
-            mm = np.percentile(loss_data[:], self.only_hard_label)
-            #print(m.data.cpu(), mm)
-            labels[loss < mm] = 255
-            return labels
-
-    def rand_bbox(self, size, lam):
-        if len(size) == 4:
-            W = size[2]
-            H = size[3]
-        elif len(size) == 3:
-            W = size[1]
-            H = size[2]
-        else:
-            raise Exception
-
-        cut_rat = np.sqrt(1. - lam)
-        cut_w = np.int(W * cut_rat)
-        cut_h = np.int(H * cut_rat)
-
-        # uniform
-        cx = np.random.randint(W)
-        cy = np.random.randint(H)
-
-        bbx1 = np.clip(cx - cut_w // 2, 0, W)
-        bby1 = np.clip(cy - cut_h // 2, 0, H)
-        bbx2 = np.clip(cx + cut_w // 2, 0, W)
-        bby2 = np.clip(cy + cut_h // 2, 0, H)
-
-        return bbx1, bby1, bbx2, bby2
-
-    def patch_images(self, images1, images2, labels1, labels2):
-        beta = 1.
-        lam = np.random.beta(beta, beta)
-
-        bbx1, bby1, bbx2, bby2 = self.rand_bbox(images1.size(), lam)
-        images1[:, :, bbx1:bbx2, bby1:bby2] = images2[:, :, bbx1:bbx2, bby1:bby2]
-        labels1[:, bbx1:bbx2, bby1:bby2] = labels2[:, bbx1:bbx2, bby1:bby2]
-
-        return images1, labels1
-
-    def gen_update(self, images, images_t, labels, labels_t, i_iter):
-            self.gen_opt.zero_grad()
-
-            pred1, pred2 = self.G(images)
-            pred1 = self.interp(pred1)
-            pred2 = self.interp(pred2)
-
-            # aug_images, aug_labels = self.patch_images(images, images_t, labels, labels_t)
-
-            # pred3, pred4 = self.G(aug_images)
-            # pred3 = self.interp(pred3)
-            # pred4 = self.interp(pred4)
-
-            if self.class_balance:
-                self.seg_loss = self.update_class_criterion(labels)
-            
-            if self.only_hard_label > 0:
-                labels1 = self.update_label(labels.clone(), pred1)
-                labels2 = self.update_label(labels.clone(), pred2)
-                # labels3 = self.update_label(aug_labels.clone(), pred3)
-                loss_seg1 = self.seg_loss(pred1, labels1)
-                loss_seg2 = self.seg_loss(pred2, labels2)
-                # loss_seg3 = self.seg_loss(pred3, labels3)
-            else:
-                loss_seg1 = self.seg_loss(pred1, labels)
-                loss_seg2 = self.seg_loss(pred2, labels)
-                # loss_seg3 = self.seg_loss(pred3, aug_labels)
-
-            loss = loss_seg2 + self.lambda_seg * loss_seg1
-
-            pred_target1, pred_target2 = self.G(images_t)
-            pred_target1 = self.interp_target(pred_target1)
-            pred_target2 = self.interp_target(pred_target2)
-
-            if self.multi_gpu:
-                loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-            else:
-                loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-    
-            loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
-
-            if i_iter < 15000:
-                self.lambda_kl_target_copy = 0
-                self.lambda_me_target_copy = 0
-            else:
-                self.lambda_kl_target_copy = self.lambda_kl_target
-                self.lambda_me_target_copy = self.lambda_me_target
-
-            loss_me = 0.0
-            if self.lambda_me_target_copy>0:
-                confidence_map = torch.sum( self.sm(0.5*pred_target1 + pred_target2)**2, 1).detach()
-                loss_me = -torch.mean( confidence_map * torch.sum( self.sm(0.5*pred_target1 + pred_target2) * self.log_sm(0.5*pred_target1 + pred_target2), 1) )
-                loss += self.lambda_me_target * loss_me
-
-            loss_kl = 0.0
-            if self.lambda_kl_target_copy>0:
-                n, c, h, w = pred_target1.shape
-                with torch.no_grad():
-                    mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
-                loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , mean_pred)  + self.kl_loss(self.log_sm(pred_target1) , mean_pred))/(n*h*w)
-
-                loss += self.lambda_kl_target * loss_kl
-
-            loss.backward()
-            self.gen_opt.step()
-
-            val_loss = self.seg_loss(pred_target1, labels_t)
-
-            return loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss
-    
-
-    def dis_update(self, pred1, pred2, pred_target1, pred_target2):
-            self.dis1_opt.zero_grad()
-            self.dis2_opt.zero_grad()
-
-            pred1 = pred1.detach()
-            pred2 = pred2.detach()
-            
-            pred_target1 = pred_target1.detach()
-            pred_target2 = pred_target2.detach()
-
-            if self.multi_gpu:
-                loss_D1, reg1 = self.D1.module.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-                loss_D2, reg2 = self.D2.module.calc_dis_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-            else:
-                loss_D1, reg1 = self.D1.calc_dis_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-                loss_D2, reg2 = self.D2.calc_dis_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1), input_real = F.softmax(0.5*pred1 + pred2, dim=1) )
-
-            loss = loss_D1 + loss_D2
-            if self.fp16:
-                with amp.scale_loss(loss, [self.dis1_opt, self.dis2_opt]) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-
-            self.dis1_opt.step()
-            self.dis2_opt.step()
-            return loss_D1, loss_D2
+if __name__ == '__main__':
+    main()
