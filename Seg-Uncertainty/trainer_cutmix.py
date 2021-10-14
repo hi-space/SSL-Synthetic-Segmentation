@@ -14,6 +14,7 @@ import numpy as np
 import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
 
 def weights_init(init_type='gaussian'):
     def init_fun(m):
@@ -54,7 +55,7 @@ def fliplr(img):
     return img_flip
 
 class AD_Trainer(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, viz=False):
         super(AD_Trainer, self).__init__()
         self.fp16 = args.fp16
         self.class_balance = args.class_balance
@@ -64,6 +65,7 @@ class AD_Trainer(nn.Module):
         self.often_weight = torch.FloatTensor(self.num_classes).zero_().cuda() + 1
         self.multi_gpu = args.multi_gpu
         self.only_hard_label = args.only_hard_label
+        self.viz = viz
         if args.model == 'DeepLab':
             # self.G = DeeplabMulti(num_classes=args.num_classes, use_se = args.use_se, train_bn = args.train_bn, norm_style = args.norm_style, droprate = args.droprate)
             self.G = Res_Deeplab(num_classes=args.num_classes)
@@ -131,7 +133,11 @@ class AD_Trainer(nn.Module):
             self.G, self.gen_opt = amp.initialize(self.G, self.gen_opt, opt_level="O1")
             self.D1, self.dis1_opt = amp.initialize(self.D1, self.dis1_opt, opt_level="O1")
             self.D2, self.dis2_opt = amp.initialize(self.D2, self.dis2_opt, opt_level="O1")
-
+        
+        if viz:
+            fig = plt.figure('eval')
+            self.ax1, self.ax2, self.ax3 = fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2), fig.add_subplot(1, 3, 3)
+            self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
     
     def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
                          use_hard_labels=True):
@@ -273,6 +279,17 @@ class AD_Trainer(nn.Module):
             self.gen_opt.step()
 
             val_loss = self.seg_loss(pred_target1, labels_t)
+
+            if self.viz:
+                aug_labels = aug_labels.cpu()
+                aug_labels[aug_labels==255] = 0
+
+                self.ax1.imshow(torchvision.utils.make_grid(aug_images[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
+                self.ax3.imshow(torch.argmax(pred2, 1)[0:1, :, :].cpu().permute(1,2,0))
+                self.ax2.imshow(aug_labels[0:1, :, :].cpu().permute(1,2,0))
+
+                plt.draw()
+                plt.savefig('eval_' + str(i_iter) + '.png', dpi=250, bbox_inches='tight')
 
             return loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss, aug_images
     
