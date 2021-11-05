@@ -254,4 +254,4 @@ if __name__ == '__main__':
     with torch.no_grad():
         save_path = main()
     print('Time used: {} sec'.format(time.time()-tt))
-    # os.system('python compute_iou.py ./data/Cityscapes/data/gtFine/val %s'%save_path)
+    os.system('python compute_iou.py /home/yoo/data/cityscapes/gtFine/val %s'%save_path)

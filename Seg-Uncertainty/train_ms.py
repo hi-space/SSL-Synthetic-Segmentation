@@ -29,8 +29,7 @@ from config import CONSTS
 import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
-
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -46,7 +45,8 @@ DATA_LIST_PATH = CONSTS.GTA_TRAIN_LIST_PATH
 DROPRATE = 0.1
 IGNORE_LABEL = 255
 INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
+# DATA_DIRECTORY_TARGET = CONSTS.CITYSCAPES_PATH
+DATA_DIRECTORY_TARGET = '/home/yoo/workspace/SSL-Synthetic-Segmentation/Seg-Uncertainty/pseudo/gta_seg'
 DATA_LIST_PATH_TARGET = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
 INPUT_SIZE_TARGET = '1024,512'
 CROP_SIZE = '640,360' # 640,360
@@ -207,6 +207,7 @@ if not os.path.exists(args.snapshot_dir):
 
 with open('%s/opts.yaml'%args.snapshot_dir, 'w') as fp:
     yaml.dump(vars(args), fp, default_flow_style=False)
+    
 
 
 def main():
@@ -248,28 +249,48 @@ def main():
     else:
         Trainer = AD_Trainer(args)
 
-    print(Trainer)
-
-    trainloader = data.DataLoader(
-        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
-                    resize_size=args.input_size,
-                    crop_size=args.crop_size,
-                    scale=True, mirror=True, mean=IMG_MEAN, autoaug = args.autoaug),
-        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
-
-    trainloader_iter = enumerate(trainloader)
-
-    targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+    trainloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                      max_iters=args.num_steps * args.iter_size * args.batch_size,
                                                      resize_size=args.input_size_target,
                                                      crop_size=args.crop_size,
                                                      scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                     set=args.set, autoaug = args.autoaug_target),
+                                                     set=args.set, autoaug = args.autoaug_target, randaug=False),
                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                    pin_memory=True, drop_last=True)
 
+    trainloader_iter = enumerate(trainloader)
 
-    targetloader_iter = enumerate(targetloader)
+    valloader = data.DataLoader(cityscapesDataSet(CONSTS.CITYSCAPES_PATH, CONSTS.CITYSCAPES_VAL_LIST_PATH,
+                                                     max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                     resize_size=args.input_size_target,
+                                                     crop_size=args.crop_size,
+                                                     scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                     set='val', autoaug = args.autoaug_target),
+                                   batch_size=1, shuffle=True, num_workers=args.num_workers,
+                                   pin_memory=True, drop_last=True)
+
+    valloader_iter = enumerate(valloader)
+
+    # trainloader = data.DataLoader(
+    #     GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
+    #                 resize_size=args.input_size,
+    #                 crop_size=args.crop_size,
+    #                 scale=True, mirror=True, mean=IMG_MEAN, autoaug = args.autoaug),
+    #     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+
+    # trainloader_iter = enumerate(trainloader)
+
+    # targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+    #                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
+    #                                                  resize_size=args.input_size_target,
+    #                                                  crop_size=args.crop_size,
+    #                                                  scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+    #                                                  set=args.set, autoaug = args.autoaug_target),
+    #                                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+    #                                pin_memory=True, drop_last=True)
+
+
+    # targetloader_iter = enumerate(targetloader)
 
     # set up tensor board
     if args.tensorboard:
@@ -285,7 +306,7 @@ def main():
         ax1.axis('off'), ax2.axis('off')
         ax1.set_title('GTA'), ax2.set_title('Cityscapes')
 
-    for i_iter in range(35001, args.num_steps):
+    for i_iter in range(0, args.num_steps):
 
         loss_seg_value1 = 0
         loss_adv_target_value1 = 0
@@ -300,13 +321,8 @@ def main():
         adjust_learning_rate_D(Trainer.dis2_opt, i_iter, args)
 
         for sub_i in range(args.iter_size):
-
-            # train G
-
-            # train with source
-
             _, batch = trainloader_iter.__next__()
-            _, batch_t = targetloader_iter.__next__()
+            _, batch_t = valloader_iter.__next__()
 
             images, labels, _, _ = batch
             images = images.cuda()
@@ -323,33 +339,34 @@ def main():
                 plt.pause(0.001)
             
             with Timer("Elapsed time in update: %f"):
-                loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss = Trainer.gen_update(images, images_t, labels, labels_t, i_iter)
+                loss_seg1, loss_seg2, val_loss = Trainer.gen_update(images, images_t, labels, labels_t, i_iter, writer)
                 loss_seg_value1 += loss_seg1.item() / args.iter_size
                 loss_seg_value2 += loss_seg2.item() / args.iter_size
-                loss_adv_target_value1 += loss_adv_target1 / args.iter_size
-                loss_adv_target_value2 += loss_adv_target2 / args.iter_size
-                loss_me_value = loss_me
+                # loss_adv_target_value1 += loss_adv_target1 / args.iter_size
+                # loss_adv_target_value2 += loss_adv_target2 / args.iter_size
+                # loss_me_value = loss_me
 
-                if args.lambda_adv_target1 > 0 and args.lambda_adv_target2 > 0:
-                    loss_D1, loss_D2 = Trainer.dis_update(pred1, pred2, pred_target1, pred_target2)
-                    loss_D_value1 += loss_D1.item()
-                    loss_D_value2 += loss_D2.item()
-                else:
-                    loss_D_value1 = 0
-                    loss_D_value2 = 0
+                # if args.lambda_adv_target1 > 0 and args.lambda_adv_target2 > 0:
+                #     loss_D1, loss_D2 = Trainer.dis_update(pred1, pred2, pred_target1, pred_target2)
+                #     loss_D_value1 += loss_D1.item()
+                #     loss_D_value2 += loss_D2.item()
+                # else:
+                #     loss_D_value1 = 0
+                #     loss_D_value2 = 0
 
-        del pred1, pred2, pred_target1, pred_target2
 
         if args.tensorboard:
             scalar_info = {
                 'loss_seg1': loss_seg_value1,
                 'loss_seg2': loss_seg_value2,
-                'loss_adv_target1': loss_adv_target_value1,
-                'loss_adv_target2': loss_adv_target_value2,
-                'loss_me_target': loss_me_value,
-                'loss_kl_target': loss_kl,
-                'loss_D1': loss_D_value1,
-                'loss_D2': loss_D_value2,
+                # 'loss_adv_target1': loss_adv_target_value1,
+                # 'loss_adv_target2': loss_adv_target_value2,
+                # 'loss_me_target': loss_me_value,
+                # 'loss_kl_target': loss_kl,
+                # 'loss_target1_entp': loss_target1_entp,
+                # 'loss_target2_entp': loss_target2_entp,
+                # 'loss_D1': loss_D_value1,
+                # 'loss_D2': loss_D_value2,
                 'val_loss': val_loss,
             }
 
@@ -358,13 +375,13 @@ def main():
                     writer.add_scalar(key, val, i_iter)
 
         logger.info(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, val_loss))
 
         print(
-        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f loss_me = %.3f  loss_kl = %.3f loss_adv1 = %.3f, loss_adv2 = %.3f loss_D1 = %.3f loss_D2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_me_value, loss_kl, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2, val_loss))
+        '\033[1m iter = %8d/%8d \033[0m loss_seg1 = %.3f loss_seg2 = %.3f, val_loss=%.3f'%(i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, val_loss))
 
         # clear loss
-        del loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, val_loss
+        del loss_seg1, loss_seg2, val_loss
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')

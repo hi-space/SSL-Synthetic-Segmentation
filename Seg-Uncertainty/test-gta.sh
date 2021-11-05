@@ -1,4 +1,4 @@
 #!/bin/sh
 
 python evaluate_gta5.py \
-    --restore-from ./snapshots/gta_seg/GTA5_30000.pth
+    --restore-from ./snapshots/cityscapes_seg_d100/GTA5_10000.pth

@@ -15,7 +15,9 @@ class CONSTS:
     # GTA
     GTA_PATH                    = '/home/yoo/data/cyclegta5'
     GTA_TRAIN_LIST_PATH         = './dataset/gta5_list/train.txt'
+    GTA_VAL_LIST_PATH         = './dataset/gta5_list/val.txt'
     GTA_RESULT_PATH             = './result/GTA5'
+
 
     # Synthia
     SYNTHIA_PATH                = '/data/synthia/'

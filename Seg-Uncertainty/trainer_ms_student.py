@@ -20,7 +20,29 @@ except ImportError:
 import torchvision
 import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('TkAgg')
+from PIL import Image
+
+# matplotlib.use('TkAgg')
+
+
+palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156,
+           190, 153, 153, 153, 153, 153, 250,
+           170, 30,
+           220, 220, 0, 107, 142, 35, 152, 251, 152,
+           70, 130, 180, 220, 20, 60, 255, 0, 0, 0, 0,
+           142, 0, 0, 70,
+           0, 60, 100, 0, 80, 100, 0, 0, 230, 119, 11, 32]
+zero_pad = 256 * 3 - len(palette)
+for i in range(zero_pad):
+    palette.append(0)
+
+
+def colorize_mask(mask):
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    new_mask.putpalette(palette)
+    return new_mask
+
 
 def weights_init(init_type='gaussian'):
     def init_fun(m):
@@ -98,10 +120,10 @@ class AD_Trainer(nn.Module):
                         print('%s is loaded from pre-trained weight.\n'%i_parts[0:])
         self.G.load_state_dict(new_params)
 
-        self.D1 = MsImageDis(input_dim = args.num_classes).cuda() 
-        self.D2 = MsImageDis(input_dim = args.num_classes).cuda() 
-        self.D1.apply(weights_init('gaussian'))
-        self.D2.apply(weights_init('gaussian'))
+        # self.D1 = MsImageDis(input_dim = args.num_classes).cuda() 
+        # self.D2 = MsImageDis(input_dim = args.num_classes).cuda() 
+        # self.D1.apply(weights_init('gaussian'))
+        # self.D2.apply(weights_init('gaussian'))
 
         if self.multi_gpu and args.sync_bn:
             print("using apex synced BN")
@@ -110,17 +132,15 @@ class AD_Trainer(nn.Module):
         self.gen_opt = optim.SGD(self.G.optim_parameters(args),
                           lr=args.learning_rate, momentum=args.momentum, nesterov=True, weight_decay=args.weight_decay)
 
-        self.dis1_opt = optim.Adam(self.D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        # self.dis1_opt = optim.Adam(self.D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
-        self.dis2_opt = optim.Adam(self.D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        # self.dis2_opt = optim.Adam(self.D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
         self.seg_loss = nn.CrossEntropyLoss(ignore_index=255)
         self.kl_loss = nn.KLDivLoss(size_average=False)
         self.sm = torch.nn.Softmax(dim = 1)
         self.log_sm = torch.nn.LogSoftmax(dim = 1)
         self.G = self.G.cuda()
-        self.D1 = self.D1.cuda()
-        self.D2 = self.D2.cuda()
         self.interp = nn.Upsample(size= args.crop_size, mode='bilinear', align_corners=True)
         self.interp_target = nn.Upsample(size= args.crop_size, mode='bilinear', align_corners=True)
         self.lambda_seg = args.lambda_seg
@@ -140,7 +160,18 @@ class AD_Trainer(nn.Module):
         fig = plt.figure('eval')
         self.ax1, self.ax2, self.ax3 = fig.add_subplot(3, 1, 1), fig.add_subplot(3, 1, 2), fig.add_subplot(3, 1, 3)
         self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
-    
+
+    def entropy_loss(self, v):
+        """
+            Entropy loss for probabilistic prediction vectors
+            input: batch_size x channels x h x w
+            output: batch_size x 1 x h x w
+        """
+        assert v.dim() == 4
+        n, c, h, w = v.size()
+        return -torch.sum(torch.mul(v, torch.log2(v + 1e-30))) / (n * h * w * np.log2(c))
+
+
     def update_class_criterion(self, labels):
             weight = torch.FloatTensor(self.num_classes).zero_().cuda()
             weight += 1
@@ -173,53 +204,30 @@ class AD_Trainer(nn.Module):
             labels[loss < mm] = 255
             return labels
 
-    def rand_bbox(self, size, lam):
-        if len(size) == 4:
-            W = size[2]
-            H = size[3]
-        elif len(size) == 3:
-            W = size[1]
-            H = size[2]
-        else:
-            raise Exception
 
-        cut_rat = np.sqrt(1. - lam)
-        cut_w = np.int(W * cut_rat)
-        cut_h = np.int(H * cut_rat)
+    def draw_in_tensorboard(self, writer, images, i_iter, pred_main, num_classes, type_):
+        grid_image = torchvision.utils.make_grid(images[:3].clone().cpu().data, 3, normalize=True)
+        writer.add_image(f'Image - {type_}', grid_image, i_iter)
 
-        # uniform
-        cx = np.random.randint(W)
-        cy = np.random.randint(H)
+        grid_image = torchvision.utils.make_grid(torch.from_numpy(np.array(colorize_mask(np.asarray(
+            np.argmax(self.sm(pred_main).cpu().data[0].numpy().transpose(1, 2, 0),
+                    axis=2), dtype=np.uint8)).convert('RGB')).transpose(2, 0, 1)), 3,
+                            normalize=False, value_range=(0, 255))
+        writer.add_image(f'Prediction - {type_}', grid_image, i_iter)
 
-        bbx1 = np.clip(cx - cut_w // 2, 0, W)
-        bby1 = np.clip(cy - cut_h // 2, 0, H)
-        bbx2 = np.clip(cx + cut_w // 2, 0, W)
-        bby2 = np.clip(cy + cut_h // 2, 0, H)
+        output_sm = self.sm(pred_main).cpu().data[0].numpy().transpose(1, 2, 0)
+        output_ent = np.sum(-np.multiply(output_sm, np.log2(output_sm)), axis=2,
+                            keepdims=False)
+        grid_image = torchvision.utils.make_grid(torch.from_numpy(output_ent), 3, normalize=True,
+                            value_range=(0, np.log2(num_classes)))
+        writer.add_image(f'Entropy - {type_}', grid_image, i_iter)
 
-        return bbx1, bby1, bbx2, bby2
-
-    def patch_images(self, images1, images2, labels1, labels2):
-        beta = 1.
-        lam = np.random.beta(beta, beta)
-
-        bbx1, bby1, bbx2, bby2 = self.rand_bbox(images1.size(), lam)
-        images1[:, :, bbx1:bbx2, bby1:bby2] = images2[:, :, bbx1:bbx2, bby1:bby2]
-        labels1[:, bbx1:bbx2, bby1:bby2] = labels2[:, bbx1:bbx2, bby1:bby2]
-
-        return images1, labels1
-
-    def gen_update(self, images, images_t, labels, labels_t, i_iter):
+    def gen_update(self, images, images_t, labels, labels_t, i_iter, writer):
             self.gen_opt.zero_grad()
 
-            aug_images, aug_labels = self.patch_images(images.clone().detach(), images_t.clone().detach(), labels.clone().detach(), labels_t.clone().detach())
-
-            pred1, pred2 = self.G(aug_images)
+            pred1, pred2 = self.G(images)
             pred1 = self.interp(pred1)
             pred2 = self.interp(pred2)
-
-            # pred1_c, pred2_c = self.G(aug_images)
-            # pred1_c = self.interp(pred1_c)
-            # pred2_c = self.interp(pred2_c)
 
             if self.class_balance:            
                 self.seg_loss = self.update_class_criterion(labels)
@@ -227,59 +235,18 @@ class AD_Trainer(nn.Module):
             if self.only_hard_label > 0:
                 labels1 = self.update_label(labels.clone(), pred1)
                 labels2 = self.update_label(labels.clone(), pred2)
-
-                # labels1_c = self.update_label(aug_labels.clone(), pred1_c)
-                # labels2_c = self.update_label(aug_labels.clone(), pred2_c)
-
                 loss_seg1 = self.seg_loss(pred1, labels1)
                 loss_seg2 = self.seg_loss(pred2, labels2)
-
-                # loss_seg1_c = self.seg_loss(pred1_c.clone(), labels1_c)
-                # loss_seg2_c = self.seg_loss(pred2_c.clone(), labels2_c)
             else:
                 loss_seg1 = self.seg_loss(pred1, labels)
                 loss_seg2 = self.seg_loss(pred2, labels)
-
-                # loss_seg1_c = self.seg_loss(pred1_c, aug_labels)
-                # loss_seg2_c = self.seg_loss(pred2_c, aug_labels)
  
-            # loss = loss_seg2 + self.lambda_seg * loss_seg1 + loss_seg1_c + self.lambda_seg * loss_seg2_c
             loss = loss_seg2 + self.lambda_seg * loss_seg1
 
             # target
             pred_target1, pred_target2 = self.G(images_t)
             pred_target1 = self.interp_target(pred_target1)
             pred_target2 = self.interp_target(pred_target2)
-
-            if self.multi_gpu:
-                loss_adv_target1 = self.D1.module.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.module.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-            else:
-                loss_adv_target1 = self.D1.calc_gen_loss( self.D1, input_fake = F.softmax(pred_target1, dim=1) )
-                loss_adv_target2 = self.D2.calc_gen_loss( self.D2, input_fake = F.softmax(pred_target2, dim=1) )
-
-            loss += self.lambda_adv_target1 * loss_adv_target1 + self.lambda_adv_target2 * loss_adv_target2
-
-            if i_iter < 15000:
-                self.lambda_kl_target_copy = 0
-                self.lambda_me_target_copy = 0
-            else:
-                self.lambda_kl_target_copy = self.lambda_kl_target
-                self.lambda_me_target_copy = self.lambda_me_target
-
-            loss_me = 0.0
-            if self.lambda_me_target_copy>0:
-                confidence_map = torch.sum( self.sm(0.5*pred_target1 + pred_target2)**2, 1).detach()
-                loss_me = -torch.mean( confidence_map * torch.sum( self.sm(0.5*pred_target1 + pred_target2) * self.log_sm(0.5*pred_target1 + pred_target2), 1) )
-                loss += self.lambda_me_target * loss_me
-
-            loss_kl = 0.0
-            if self.lambda_kl_target_copy>0:
-                n, c, h, w = pred_target1.shape
-                with torch.no_grad():
-                    mean_pred = self.sm(0.5*pred_target1 + pred_target2) #+ self.sm(fliplr(0.5*pred_target1_flip + pred_target2_flip)) ) /2
-                loss_kl = ( self.kl_loss(self.log_sm(pred_target2) , labels_t)  + self.kl_loss(self.log_sm(pred_target1) , labels_t))/(n*h*w)
-                loss += self.lambda_kl_target * loss_kl
 
             if self.fp16:
                 with amp.scale_loss(loss, self.gen_opt) as scaled_loss:
@@ -290,31 +257,29 @@ class AD_Trainer(nn.Module):
 
             val_loss = self.seg_loss(pred_target2, labels_t)
 
-            # labels_t = labels_t.cpu()
-            # labels_t[labels_t==255] = 0
+            if i_iter % 100 == 0:
+                labels_t = labels_t.cpu()
+                labels_t[labels_t==255] = 0
 
-            # self.ax1.imshow(torchvision.utils.make_grid(images_t[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
-            # self.ax2.imshow(torch.argmax(pred_target2, 1)[0:1, :, :].cpu().permute(1,2,0))
-            # self.ax3.imshow(labels_t[0:1, :, :].permute(1,2,0))
+                self.draw_in_tensorboard(writer, images, i_iter, pred2, 19, 'T')
+                self.draw_in_tensorboard(writer, images_t, i_iter, pred_target2, 19, 'V')
 
-            aug_labels = aug_labels.cpu()
-            aug_labels[aug_labels==255] = 0
+                self.ax1.imshow(torchvision.utils.make_grid(images_t[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
+                self.ax2.imshow(torch.argmax(pred_target2, 1)[0:1, :, :].cpu().permute(1,2,0))
+                self.ax3.imshow(labels_t[0:1, :, :].permute(1,2,0))
+                
+                plt.draw()
+                plt.savefig('training.png', dpi=250, bbox_inches='tight')
 
-            self.ax1.imshow(torchvision.utils.make_grid(aug_images[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
-            self.ax2.imshow(torch.argmax(pred2, 1)[0:1, :, :].cpu().permute(1,2,0))
-            self.ax3.imshow(aug_labels[0:1, :, :].permute(1,2,0))
-
-            plt.draw()
-            plt.savefig('training' + str(i_iter) + '.png', dpi=250, bbox_inches='tight')
-
-
-            return loss_seg1, loss_seg2, loss_adv_target1, loss_adv_target2, loss_me, loss_kl, pred1, pred2, pred_target1, pred_target2, val_loss
+            return loss_seg1, loss_seg2, val_loss
     
     def dis_update(self, pred1, pred2, pred_target1, pred_target2):
             self.dis1_opt.zero_grad()
             self.dis2_opt.zero_grad()
+
             pred1 = pred1.detach()
             pred2 = pred2.detach()
+            
             pred_target1 = pred_target1.detach()
             pred_target2 = pred_target2.detach()
 

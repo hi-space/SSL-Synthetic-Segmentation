@@ -24,6 +24,12 @@ import torch.nn as nn
 import yaml
 
 from config import CONSTS
+import torchvision
+import matplotlib
+import matplotlib.pyplot as plt
+from PIL import Image
+
+matplotlib.use('TkAgg')
 
 torch.backends.cudnn.benchmark=True
 
@@ -32,21 +38,21 @@ IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 DATA_DIRECTORY = CONSTS.CITYSCAPES_PATH
 
 # train
-# DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
-# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
-# SET = 'train' # We generate pseudo label for training set
-# NUM_STEPS = 2975 # Number of images in the training set.
+DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAIN_LIST_PATH
+SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH
+SET = 'train' # We generate pseudo label for training set
+NUM_STEPS = 2975 # Number of images in the training set.
 
-# trainextra
+# # trainextra
 # DATA_LIST_PATH = CONSTS.CITYSCAPES_TRAINEXTRA_LIST_PATH
 # SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + 'trainextra'
 # SET = 'trainextra'
 # NUM_STEPS = 19998
 
-NUM_STEPS = 500 # Number of images in the validation set.
-DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
-SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + '/val'
-SET = 'val'
+# NUM_STEPS = 500 # Number of images in the validation set.
+# DATA_LIST_PATH = CONSTS.CITYSCAPES_VAL_LIST_PATH
+# SAVE_PATH = CONSTS.CITYSCAPES_PSEUDO_PATH + '/val'
+# SET = 'val'
 
 if not os.path.isdir(CONSTS.CITYSCAPES_PSEUDO_PATH):
     os.mkdir(CONSTS.CITYSCAPES_PSEUDO_PATH)
@@ -58,6 +64,23 @@ RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 
+
+def visualize(save=False, save_path=SAVE_PATH, save_name='test', **images):
+    """PLot images in one row."""
+    n = len(images)
+    
+    for i, (name, image) in enumerate(images.items()):
+        plt.subplot(1, n, i + 1)
+        plt.xticks([])
+        plt.yticks([])
+        # plt.title(' '.join(name.split('_')).title())
+        plt.imshow(image)
+    
+    if save:
+        plt.savefig(save_path + save_name + '.png', bbox_inches='tight', dpi=300)
+    else:
+        plt.show()
+        plt.pause(0.0001)
 
 MODEL = 'DeeplabMulti'
 
@@ -170,11 +193,23 @@ def main():
     model.eval()
     model.cuda(gpu0)
 
+
+    fig = plt.figure('eval')
+    ax1, ax2, ax3 = fig.add_subplot(2, 4, 1), fig.add_subplot(2, 4, 2), fig.add_subplot(2, 4, 3)
+    ax4, ax5, ax6 = fig.add_subplot(2, 4, 4), fig.add_subplot(2, 4, 5), fig.add_subplot(2, 4, 6)
+    ax7, ax8 = fig.add_subplot(2, 4, 7), fig.add_subplot(2, 4, 8)
+    ax1.axis('off'), ax2.axis('off'), ax3.axis('off')
+    ax4.axis('off'), ax5.axis('off'), ax6.axis('off')
+    ax7.axis('off'), ax8.axis('off')
+
     testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                     batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
 
-    scale = 1.25
-    testloader2 = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set, autoaug=True),
+    
+    testloader2 = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set, autoaug = True),
+                                    batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
+
+    testloader3 = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(512, 1024), resize_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set, autoaug = True),
                                     batch_size=batchsize, shuffle=False, pin_memory=True, num_workers=4)
 
 
@@ -187,35 +222,39 @@ def main():
     log_sm = torch.nn.LogSoftmax(dim = 1)
     kl_distance = nn.KLDivLoss( reduction = 'none')
 
-    for index, img_data in enumerate(zip(testloader, testloader2) ):
-        batch, batch2 = img_data
+    for index, img_data in enumerate(zip(testloader, testloader2, testloader3) ):
+        batch, batch2, batch3 = img_data
         image, _, _, name = batch
         image2, _, _, name2 = batch2
+        image3, _, _, _ = batch3
 
         inputs = image.cuda()
         inputs2 = image2.cuda()
+        input3 = image3.cuda()
         print('\r>>>>Extracting feature...%04d/%04d'%(index*batchsize, NUM_STEPS), end='')
         if args.model == 'DeepLab':
             with torch.no_grad():
                 output1, output2 = model(inputs)
-                output_batch = interp(sm(0.5* output1 + output2))
+                output_batch1 = interp(sm(0.5* output1 + output2))
+                
+                output3, output4 = model(inputs2)
+                output_batch2 = interp(sm(0.5* output3 + output4))
+
+                output5, output6 = model(input3)
+                output_batch3 = interp(sm(0.5* output5 + output6))
+
+                lmda = 0.5
+                output_batch = interp(sm((0.5 * output1 + output2) + lmda * (0.5 * output3 + output4)+ lmda * (0.5 * output5 + output6)))
+
 
                 heatmap_batch = torch.sum(kl_distance(log_sm(output1), sm(output2)), dim=1)
 
-                # output1, output2 = model(fliplr(inputs))
-                # output1, output2 = fliplr(output1), fliplr(output2)
-                # output_batch += interp(sm(0.5 * output1 + output2)) 
-                # del output1, output2, inputs
-
-                # output1, output2 = model(inputs2)
-                # output_batch += interp(sm(0.5* output1 + output2))
-                # output1, output2 = model(fliplr(inputs2))
-                # output1, output2 = fliplr(output1), fliplr(output2)
-                # output_batch += interp(sm(0.5 * output1 + output2))
-                # del output1, output2, inputs2
-
                 output_batch = output_batch.cpu().data.numpy()
                 heatmap_batch = heatmap_batch.cpu().data.numpy()
+
+                output_batch1 = output_batch1.cpu().data.numpy()
+                output_batch2 = output_batch2.cpu().data.numpy()
+                output_batch3 = output_batch3.cpu().data.numpy()
 
                 del output1, inputs, output2
 
@@ -226,12 +265,38 @@ def main():
         output_batch = output_batch.transpose(0,2,3,1)
         score_batch = np.max(output_batch, axis=3)
         output_batch = np.asarray(np.argmax(output_batch, axis=3), dtype=np.uint8)
+
+        output_batch_tmp = np.copy(output_batch)
         output_batch[score_batch<0.6] = 255  #3.2 = 4*0.8
+
+
+        output_batch1 = output_batch1.transpose(0,2,3,1)
+        output_batch2 = output_batch2.transpose(0,2,3,1)
+        output_batch3 = output_batch3.transpose(0,2,3,1)
+
+        score_batch1 = np.max(output_batch1, axis=3)
+        score_batch2 = np.max(output_batch2, axis=3)
+        score_batch3 = np.max(output_batch3, axis=3)
+
+        output_batch1 = np.asarray(np.argmax(output_batch1, axis=3), dtype=np.uint8)
+        output_batch2 = np.asarray(np.argmax(output_batch2, axis=3), dtype=np.uint8)
+        output_batch3 = np.asarray(np.argmax(output_batch3, axis=3), dtype=np.uint8)
 
         for i in range(output_batch.shape[0]):
             output = output_batch[i,:,:]
             output_col = colorize_mask(output)
             output = Image.fromarray(output)
+
+            output1 = output_batch1[i,:,:]
+            output2 = output_batch2[i,:,:]
+            output3 = output_batch3[i,:,:]
+            output_col1 = colorize_mask(output1)
+            output_col2 = colorize_mask(output2)
+            output_col3 = colorize_mask(output3)
+
+            output1 = Image.fromarray(output1)
+            output2 = Image.fromarray(output2)
+            output3 = Image.fromarray(output3)
 
             name_tmp = name[i].split('/')[-1]
             dir_name = name[i].split('/')[-2]
@@ -243,6 +308,13 @@ def main():
             output.save('%s/%s' % (save_path, name_tmp))
             print('%s/%s' % (save_path, name_tmp))
             output_col.save('%s/%s_color.png' % (save_path, name_tmp.split('.')[0]))
+            
+            output_tmp = output_batch_tmp[i, :, :]
+            colorize_mask(output_tmp).save('%s/%s_tmp.png' % (save_path, name_tmp.split('.')[0]))
+
+            output_col1.save('%s/%s_color1.png' % (save_path, name_tmp.split('.')[0]))
+            output_col2.save('%s/%s_color2.png' % (save_path, name_tmp.split('.')[0]))
+            output_col3.save('%s/%s_color3.png' % (save_path, name_tmp.split('.')[0]))
 
             # heatmap_tmp = heatmap_batch[i,:,:]/np.max(heatmap_batch[i,:,:])
             # fig = plt.figure()
@@ -251,13 +323,83 @@ def main():
             # fig.colorbar(heatmap)
             # fig.savefig('%s/%s_heatmap.png' % (save_path, name_tmp.split('.')[0]))
 
+            # torchvision.utils.save_image(torchvision.utils.make_grid(image[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0), '%s/%s_img1.png' % (save_path, name_tmp.split('.')[0]))
+            # torchvision.utils.save_image(torchvision.utils.make_grid(image[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0), '%s/%s_img2.png' % (save_path, name_tmp.split('.')[0]))
+            # torchvision.utils.save_image(image3[0, :, :, :].cpu().permute(1,2,0), '%s/%s_img3.png' % (save_path, name_tmp.split('.')[0]))
+            
+
             scoremap_tmp = 1-score_batch[i,:,:]/np.max(score_batch[i,:,:])
             fig = plt.figure()
             plt.axis('off')
             heatmap = plt.imshow(scoremap_tmp, cmap='viridis')
             fig.colorbar(heatmap)
             fig.savefig('%s/%s_scoremap.png' % (save_path, name_tmp.split('.')[0]))
-            
+
+            scoremap_tmp1 = 1-score_batch1[i,:,:]/np.max(score_batch1[i,:,:])
+            fig = plt.figure()
+            plt.axis('off')
+            heatmap = plt.imshow(scoremap_tmp1, cmap='viridis')
+            fig.colorbar(heatmap)
+            fig.savefig('%s/%s_scoremap1.png' % (save_path, name_tmp.split('.')[0]))
+
+            scoremap_tmp2 = 1-score_batch2[i,:,:]/np.max(score_batch2[i,:,:])
+            fig = plt.figure()
+            plt.axis('off')
+            heatmap = plt.imshow(scoremap_tmp2, cmap='viridis')
+            fig.colorbar(heatmap)
+            fig.savefig('%s/%s_scoremap2.png' % (save_path, name_tmp.split('.')[0]))
+
+            scoremap_tmp3 = 1-score_batch3[i,:,:]/np.max(score_batch3[i,:,:])
+            fig = plt.figure()
+            plt.axis('off')
+            heatmap = plt.imshow(scoremap_tmp3, cmap='viridis')
+            fig.colorbar(heatmap)
+            fig.savefig('%s/%s_scoremap3.png' % (save_path, name_tmp.split('.')[0]))
+
+            # ax1.imshow(torchvision.utils.make_grid(image[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0))
+            # ax2.imshow(torch.argmax(output_batch1, 1)[0:1, :, :].cpu().permute(1,2,0))
+            # ax3.imshow(torchvision.utils.make_grid(image2[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0))
+            # ax4.imshow(torch.argmax(output_batch2, 1)[0:1, :, :].cpu().permute(1,2,0))
+            # ax5.imshow(torchvision.utils.make_grid(image3[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0))
+            # ax6.imshow(torch.argmax(output_batch3, 1)[0:1, :, :].cpu().permute(1,2,0))
+            # ax7.imshow(output)
+            # ax8.imshow(scoremap_tmp)
+
+            # plt.draw()
+            # plt.pause(0.001)
+
+
+            visualize(
+                save=True,
+                save_path='%s/%s' % (save_path, name_tmp),
+                save_name=name_tmp,
+                image1=torchvision.utils.make_grid(image[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+                # pred1=scoremap_tmp1,
+                image2=torchvision.utils.make_grid(image2[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+                # pred2=scoremap_tmp2,
+                image3=torchvision.utils.make_grid(image3[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+                # pred3=scoremap_tmp3,
+                # total_pred=Image.fromarray(output_batch),
+                # score1=scoremap_tmp,
+            )
+
+            # visualize(
+            #     save=True,
+            #     save_name='comp',
+            #     image1=torchvision.utils.make_grid(image[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+            #     pred1=torch.argmax(output_batch1, 1)[0:1, :, :].cpu().permute(1,2,0),
+            #     image2=torchvision.utils.make_grid(image2[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+            #     pred2=torch.argmax(output_batch2, 1)[0:1, :, :].cpu().permute(1,2,0),
+            #     image3=torchvision.utils.make_grid(image3[0, :, :, :].cpu(), normalize=True).permute(1, 2, 0),
+            #     pred3=torch.argmax(output_batch3, 1)[0:1, :, :].cpu().permute(1,2,0),
+            #     # total_pred=Image.fromarray(output_batch),
+            #     score1=scoremap_tmp,
+            # )
+
+            # plt.show()
+            # plt.pause(0.0001)
+
+
     return args.save
 
 if __name__ == '__main__':

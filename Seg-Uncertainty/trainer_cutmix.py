@@ -55,7 +55,7 @@ def fliplr(img):
     return img_flip
 
 class AD_Trainer(nn.Module):
-    def __init__(self, args, viz=False):
+    def __init__(self, args, viz=True):
         super(AD_Trainer, self).__init__()
         self.fp16 = args.fp16
         self.class_balance = args.class_balance
@@ -136,7 +136,7 @@ class AD_Trainer(nn.Module):
         
         if viz:
             fig = plt.figure('eval')
-            self.ax1, self.ax2, self.ax3 = fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2), fig.add_subplot(1, 3, 3)
+            self.ax1, self.ax2, self.ax3 = fig.add_subplot(3, 1, 1), fig.add_subplot(3, 1, 2), fig.add_subplot(3, 1, 3)
             self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
     
     def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
@@ -289,7 +289,7 @@ class AD_Trainer(nn.Module):
                 self.ax2.imshow(aug_labels[0:1, :, :].cpu().permute(1,2,0))
 
                 plt.draw()
-                plt.savefig('eval_' + str(i_iter) + '.png', dpi=250, bbox_inches='tight')
+                plt.savefig('gta_' + str(i_iter) + '.png', dpi=250, bbox_inches='tight')
 
             return loss_seg1, loss_adv_target1, pred1, pred_target1, val_loss, aug_images
     

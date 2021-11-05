@@ -1,6 +1,6 @@
 import random
 
-l = random.sample(range(0, 24966), 500)
+l = random.sample(range(0, 24966), 1000)
 
 result = []
 

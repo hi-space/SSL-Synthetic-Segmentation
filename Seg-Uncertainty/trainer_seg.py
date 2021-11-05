@@ -207,11 +207,12 @@ class AD_Trainer(nn.Module):
             pred = torch.argmax(val_pred, 1).squeeze(0).cpu().data.numpy()
             mask = self.label_mapping(pred, self.mapping)
 
-            if vis_data:
+            if vis_data and i_iter % 100 == 0:
                 ax1.imshow(torchvision.utils.make_grid(images_v.cpu(), normalize=True).permute(1,2,0))
                 ax2.imshow(mask)
-                plt.draw()
-                plt.pause(0.001)
+                plt.savefig('training.png', dpi=250, bbox_inches='tight')
+                # plt.draw()
+                # plt.pause(0.001)
 
             return loss_seg1, loss_seg2, pred1, pred2, val_loss
     

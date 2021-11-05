@@ -2,4 +2,5 @@
 
 python compute_iou.py \
     /home/yoo/data/cityscapes/gtFine/val \
-    ./result/aagc_640x360_b2_single_cutmix
+    /home/yoo/eval/20.6-multi_640x360_lsgan_b2/
+#    ./result/gc_640x360_b1

@@ -1,7 +1,8 @@
 #!/bin/sh
 
 python train_cutmix_multi.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_multi_cutmix  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_multi_cutmix_sl  \
+    --restore-from ./snapshots/aagc_640x360_b2_multi_cutmix/GTA5_35000.pth \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \
@@ -18,4 +19,6 @@ python train_cutmix_multi.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se 
+    --use-se \
+    --autoaug \
+    --autoaug_target

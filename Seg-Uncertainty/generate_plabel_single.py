@@ -201,7 +201,7 @@ def main():
         score_batch = np.max(output_batch, axis=3)
 
         output_batch = np.asarray(np.argmax(output_batch, axis=3), dtype=np.uint8)
-        output_batch[score_batch<0.5] = 255  #3.2 = 4*0.8
+        # output_batch[score_batch<0.5] = 255  #3.2 = 4*0.8
         for i in range(output_batch.shape[0]):
             output = output_batch[i,:,:]
             output_col = colorize_mask(output)
@@ -217,6 +217,13 @@ def main():
             output.save('%s/%s' % (save_path, name_tmp.replace('leftImg8bit.png', 'gtFine_labelIds.png')))
             print('%s/%s' % (save_path, name_tmp))
             output_col.save('%s/%s_color.png' % (save_path, name_tmp.split('.')[0]))
+
+            scoremap_tmp = 1-score_batch[i,:,:]/np.max(score_batch[i,:,:])
+            fig = plt.figure()
+            plt.axis('off')
+            heatmap = plt.imshow(scoremap_tmp, cmap='viridis')
+            fig.colorbar(heatmap)
+            fig.savefig('%s/%s_scoremap.png' % (save_path, name_tmp.split('.')[0]))
             
     return args.save
 

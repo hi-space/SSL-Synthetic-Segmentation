@@ -1,7 +1,7 @@
 #!/bin/sh
 
 python train_seg.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_student_seg  \
+    --snapshot-dir ./snapshots/gta_seg  \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \
@@ -18,9 +18,6 @@ python train_seg.py  \
     --max-value 7   \
     --gpu-ids 0,1   \
     --often-balance   \
-    --use-se
-    
-    
-    #  \
-    # --autoaug \
-    # --autoaug_target
+    --use-se \
+    --autoaug \
+    --autoaug_target

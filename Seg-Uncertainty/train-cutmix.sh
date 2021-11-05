@@ -1,8 +1,8 @@
 #!/bin/sh
 
 python train_cutmix.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_real_d1000  \
-    --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_real_d1000/GTA5_30000.pth \
+    --snapshot-dir ./snapshots/test  \
+    --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_real/GTA5_45000.pth \
     --drop 0.1  \
     --warm-up 5000  \
     --batch-size 2  \

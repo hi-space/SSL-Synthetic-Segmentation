@@ -1,7 +1,9 @@
 #!/bin/sh
 
 python evaluate_cityscapes.py \
---restore-from ./snapshots/aagc_640x360_b2_single_cutmix_student_seg/GTA5_45000.pth
+	--restore-from ./snapshots/aagc_640x360_b2_multi_cutmix_student/GTA5_30000.pth
+#	--restore-from ./snapshots/gta_seg/GTA5_50000.pth
+# --restore-from ./snapshots/aagc_640x360_b2_single_cutmix_student_seg/GTA5_45000.pth
     # --restore-from ./snapshots/aagc_640x360_b1_student/GTA5_20000.pth
     # --restore-from ./snapshots/gc_640x360_b1/GTA5_220000.pth
     # --restore-from ./snapshots/GTA_TO_CITY_CO/GTA5_204000.pth

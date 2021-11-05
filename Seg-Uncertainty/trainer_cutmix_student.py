@@ -140,8 +140,8 @@ class AD_Trainer(nn.Module):
         self.ax4, self.ax5, self.ax6 = fig.add_subplot(2, 3, 4), fig.add_subplot(2, 3, 5), fig.add_subplot(2, 3, 6)
         self.ax1.axis('off'), self.ax2.axis('off'), self.ax3.axis('off')
         self.ax4.axis('off'), self.ax5.axis('off'), self.ax6.axis('off')
-        self.ax1.set_title('train input'), self.ax2.set_title('train output'), self.ax3.set_title('train gt')
-        self.ax4.set_title('val input'), self.ax5.set_title('val output'), self.ax6.set_title('val gt')
+        # self.ax1.set_title('train input'), self.ax2.set_title('train output'), self.ax3.set_title('train gt')
+        # self.ax4.set_title('val input'), self.ax5.set_title('val output'), self.ax6.set_title('val gt')
 
     
     def consistency_loss(self, logits_w, logits_s, target_gt_for_visual, name='ce', T=1.0, p_cutoff=0.0,
@@ -276,20 +276,20 @@ class AD_Trainer(nn.Module):
             labels_v = labels_v.cpu()
             labels_v[labels_v==255] = 0
 
-            if i_iter % 100 == 0:
-                # ax1.imshow(torchvision.utils.make_grid(images_t.cpu(), normalize=True).permute(1,2,0))
-                # ax2.imshow(torch.argmax(pred1, 1).cpu().permute(1,2,0))
-                # ax3.imshow(labels_t.permute(1,2,0))
             
-                self.ax1.imshow(torchvision.utils.make_grid(images_t[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
-                self.ax2.imshow(torch.argmax(pred1, 1)[0:1, :, :].cpu().permute(1,2,0))
-                self.ax3.imshow(labels_t[0:1, :, :].permute(1,2,0))
+            # ax1.imshow(torchvision.utils.make_grid(images_t.cpu(), normalize=True).permute(1,2,0))
+            # ax2.imshow(torch.argmax(pred1, 1).cpu().permute(1,2,0))
+            # ax3.imshow(labels_t.permute(1,2,0))
+        
+            self.ax1.imshow(torchvision.utils.make_grid(images_t[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
+            self.ax2.imshow(torch.argmax(pred1, 1)[0:1, :, :].cpu().permute(1,2,0))
+            self.ax3.imshow(labels_t[0:1, :, :].permute(1,2,0))
 
-                self.ax4.imshow(torchvision.utils.make_grid(images_v[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
-                self.ax5.imshow(torch.argmax(val_pred, 1)[0:1, :, :].cpu().permute(1,2,0))
-                self.ax6.imshow(labels_v[0:1, :, :].permute(1,2,0))
-                plt.draw()
-                plt.savefig('eval.png')
+            self.ax4.imshow(torchvision.utils.make_grid(images_v[0, :, :, :].cpu(), normalize=True).permute(1,2,0))
+            self.ax5.imshow(torch.argmax(val_pred, 1)[0:1, :, :].cpu().permute(1,2,0))
+            self.ax6.imshow(labels_v[0:1, :, :].permute(1,2,0))
+            plt.draw()
+            plt.savefig('eval_' + str(i_iter) + '.png', bbox_inches='tight')
 
             return loss, pred1, val_loss
     

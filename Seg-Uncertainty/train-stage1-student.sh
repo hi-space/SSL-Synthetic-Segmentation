@@ -22,10 +22,10 @@
 #    --restore-from ./snapshots/GTA_TO_CITY/GTA5_150000.pth
 
 python train_ms_student.py  \
-    --snapshot-dir ./snapshots/aagc_640x360_b2_single_cutmix_real  \
+    --snapshot-dir ./snapshots/aagc_640x360_b2_multi_cutmix_student_full  \
     --drop 0.1  \
     --warm-up 5000  \
-    --batch-size 2  \
+    --batch-size 1  \
     --learning-rate 2e-4  \
     --crop-size 640,360  \
     --lambda-seg 0.5   \
